@@ -96,23 +96,23 @@
 	<title>Pedidos - Admin - Reparto</title>
 </svelte:head>
 
-<div class="space-y-6 animate-fadeIn">
+<div class="page-root animate-fadeIn full-width-desktop">
 	<!-- Encabezado -->
-	<div>
-		<h1 class="text-3xl font-bold text-gray-900">📦 Gestión de Pedidos</h1>
-		<p class="text-gray-600 mt-2">Total: {allOrders.length} pedidos registrados</p>
+	<div class="page-header">
+		<h1 class="page-title">📦 Gestión de Pedidos</h1>
+		<p class="page-subtitle">Total: {allOrders.length} pedidos registrados</p>
 	</div>
 
 	<!-- Filtros -->
-	<div class="bg-white rounded-lg border border-gray-200 p-6">
+	<div class="panel-surface radius-lg p-6">
 		<div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
 			<div>
-				<label for="status-filter" class="block text-sm font-medium text-gray-700 mb-1">Estado</label>
+				<label for="status-filter" class="block fs-sm fw-medium txt-subtle mb-1">Estado</label>
 				<select
 					id="status-filter"
 					value={statusFilter}
 					onchange={(e) => (statusFilter = e.currentTarget.value)}
-					class="w-full border border-gray-300 rounded px-3 py-2"
+					class="w-full border bd-soft bg-panel txt-primary rounded px-3 py-2"
 				>
 					<option value="all">Todos ({allOrders.length})</option>
 					<option value="pending">Pendientes ({allOrders.filter((o) => o.status === 'pending').length})</option>
@@ -122,12 +122,12 @@
 			</div>
 
 			<div>
-				<label for="zone-filter" class="block text-sm font-medium text-gray-700 mb-1">Zona</label>
+				<label for="zone-filter" class="block fs-sm fw-medium txt-subtle mb-1">Zona</label>
 				<select
 					id="zone-filter"
 					value={zoneFilter}
 					onchange={(e) => (zoneFilter = e.currentTarget.value)}
-					class="w-full border border-gray-300 rounded px-3 py-2"
+					class="w-full border bd-soft bg-panel txt-primary rounded px-3 py-2"
 				>
 					<option value="all">Todas las zonas</option>
 					{#each allZones as zone (zone.id)}
@@ -144,53 +144,53 @@
 
 	<!-- Tabla de pedidos -->
 	{#if filteredOrders.length === 0}
-		<Card>
+		<Card class="glass-slate">
 			<div class="text-center py-12">
-				<p class="text-gray-500 text-lg">No hay pedidos con este filtro</p>
+				<p class="txt-muted fs-lg">No hay pedidos con este filtro</p>
 			</div>
 		</Card>
 	{:else}
 		<div class="space-y-4">
 			{#each filteredOrders as order (order.id)}
-				<Card>
-					<div class="grid grid-cols-1 md:grid-cols-5 gap-4 mb-4">
+				<Card class="glass-blue">
+					<div class="grid grid-cols-1 md:grid-cols-5 gap-4 mb-4 p-4 radius-lg panel-surface-soft">
 						<!-- ID del pedido -->
 						<div>
-							<p class="text-sm text-gray-600">Pedido</p>
-							<p class="text-lg font-bold text-gray-900">#{order.id}</p>
+							<p class="fs-sm txt-muted">Pedido</p>
+							<p class="fs-lg fw-bold txt-primary">#{order.id}</p>
 						</div>
 
 						<!-- Cliente -->
 						<div>
-							<p class="text-sm text-gray-600">Cliente</p>
-							<p class="text-gray-900 font-medium">{getClientName(order.clientId)}</p>
+							<p class="fs-sm txt-muted">Cliente</p>
+							<p class="txt-primary fw-medium">{getClientName(order.clientId)}</p>
 						</div>
 
 						<!-- Fecha -->
 						<div>
-							<p class="text-sm text-gray-600">Creado</p>
-							<p class="text-gray-900">{formatDate(order.createdAt)}</p>
+							<p class="fs-sm txt-muted">Creado</p>
+							<p class="txt-primary">{formatDate(order.createdAt)}</p>
 						</div>
 
 						<!-- Zona -->
 						<div>
-							<p class="text-sm text-gray-600">Zona</p>
-							<p class="text-gray-900 font-medium">{getZoneNameByClient(order.clientId)}</p>
+							<p class="fs-sm txt-muted">Zona</p>
+							<p class="txt-primary fw-medium">{getZoneNameByClient(order.clientId)}</p>
 						</div>
 
 						<!-- Monto -->
 						<div>
-							<p class="text-sm text-gray-600">Total</p>
-							<p class="text-lg font-bold text-blue-600">{formatCurrency(order.totalAmount)}</p>
+							<p class="fs-sm txt-muted">Total</p>
+							<p class="fs-lg fw-bold text-blue-300">{formatCurrency(order.totalAmount)}</p>
 						</div>
 					</div>
 
 					<!-- Detalles del pedido -->
-					<div class="bg-gray-50 rounded-lg p-4 mb-4">
-						<p class="font-medium text-gray-700 mb-3">Items ({getItemsCount(order.items)})</p>
+					<div class="panel-surface-soft radius-lg p-4 mb-4">
+						<p class="fw-medium text-amber-200 mb-3">Items ({getItemsCount(order.items)})</p>
 						<div class="grid grid-cols-2 md:grid-cols-4 gap-2">
 							{#each order.items as item (item.productId)}
-								<div class="text-sm text-gray-600">
+								<div class="fs-sm txt-soft">
 									• {item.quantity} × {item.unitPrice ? formatCurrency(item.unitPrice * item.quantity) : 'N/A'}
 								</div>
 							{/each}
@@ -220,11 +220,11 @@
 									✗ Cancelar
 								</Button>
 							{:else if order.status === 'delivered'}
-								<p class="text-sm text-green-700 font-medium">
+								<p class="fs-sm text-emerald-300 fw-medium">
 									Entregado: {formatDate(order.deliveredAt)}
 								</p>
 							{:else}
-								<p class="text-sm text-red-700 font-medium">Cancelado</p>
+								<p class="fs-sm text-red-300 fw-medium">Cancelado</p>
 							{/if}
 						</div>
 					</div>

@@ -210,58 +210,62 @@
 	<title>Stock - Admin - Reparto</title>
 </svelte:head>
 
-<div class="space-y-6 animate-fadeIn">
-	<div>
-		<h1 class="text-3xl font-bold text-gray-900">📋 Gestión de Stock</h1>
-		<p class="text-gray-600 mt-2">Control total de inventario y parámetros de producto</p>
+<div class="page-root animate-fadeIn full-width-desktop">
+	<div class="page-header">
+		<h1 class="page-title">📋 Gestión de Stock</h1>
+		<p class="page-subtitle">Control total de inventario y parámetros de producto</p>
 	</div>
 
 	<div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-		<Card>
-			<div class="text-center">
-				<div class="text-3xl font-bold text-blue-600 mb-1">{totalStock}</div>
-				<p class="text-gray-600 font-medium">Unidades Totales</p>
+		<Card class="glass-blue">
+			<div class="text-center py-6 px-4 radius-lg panel-surface-soft">
+				<div class="fs-3xl fw-bold text-blue-300 mb-1">{totalStock}</div>
+				<p class="txt-subtle fw-medium">Unidades Totales</p>
 			</div>
 		</Card>
 
-		<Card>
-			<div class="text-center">
-				<div class="text-2xl font-bold text-green-600 mb-1">{formatCurrency(totalInventoryValue)}</div>
-				<p class="text-gray-600 font-medium">Valor Inventario</p>
+		<Card class="glass-emerald">
+			<div class="text-center py-6 px-4 radius-lg panel-surface-soft">
+				<div class="fs-2xl fw-bold text-emerald-300 mb-1">{formatCurrency(totalInventoryValue)}</div>
+				<p class="txt-subtle fw-medium">Valor Inventario</p>
 			</div>
 		</Card>
 
-		<Card>
-			<div class="text-center">
-				<div class="text-3xl font-bold text-indigo-600 mb-1">{productsWithStock}</div>
-				<p class="text-gray-600 font-medium">Productos Con Stock</p>
+		<Card class="glass-violet">
+			<div class="text-center py-6 px-4 radius-lg panel-surface-soft">
+				<div class="fs-3xl fw-bold text-violet-300 mb-1">{productsWithStock}</div>
+				<p class="txt-subtle fw-medium">Productos Con Stock</p>
 			</div>
 		</Card>
 
-		<Card>
-			<div class="text-center">
-				<div class="text-3xl font-bold text-red-600 mb-1">{$lowStockProducts.length}</div>
-				<p class="text-gray-600 font-medium">Bajo Stock</p>
+		<Card class="glass-red">
+			<div class="text-center py-6 px-4 radius-lg panel-surface-soft">
+				<div class="fs-3xl fw-bold text-red-300 mb-1">{$lowStockProducts.length}</div>
+				<p class="txt-subtle fw-medium">Bajo Stock</p>
 			</div>
 		</Card>
 	</div>
 
-	<Card title="⚙️ Herramientas de Inventario">
+	<Card
+		title="⚙️ Herramientas de Inventario"
+		titleClass="text-blue-300"
+		class="glass-blue"
+	>
 		<div class="grid grid-cols-1 md:grid-cols-3 gap-4">
 			<div>
-				<label for="stock-search" class="block text-sm font-medium text-gray-700 mb-1">Buscar producto</label>
+				<label for="stock-search" class="block fs-sm fw-medium txt-subtle mb-1">Buscar producto</label>
 				<input
 					id="stock-search"
 					type="text"
 					value={searchTerm}
 					oninput={(e) => (searchTerm = e.currentTarget.value)}
 					placeholder="Nombre, categoria o descripcion"
-					class="w-full border border-gray-300 rounded px-3 py-2"
+					class="w-full border bd-soft bg-panel txt-primary rounded px-3 py-2"
 				/>
 			</div>
 
 			<div class="flex items-end">
-				<label class="inline-flex items-center gap-2 text-sm text-gray-700">
+				<label class="inline-flex items-center gap-2 fs-sm txt-soft">
 					<input
 						type="checkbox"
 						checked={showOnlyInStock}
@@ -279,29 +283,29 @@
 		</div>
 
 		{#if showCreateForm}
-			<div class="mt-5 border border-blue-200 rounded-lg p-4 bg-blue-50">
-				<p class="font-semibold text-blue-900 mb-3">Alta de producto</p>
+			<div class="mt-5 radius-lg p-4 panel-surface-soft">
+				<p class="fw-semibold text-blue-200 mb-3">Alta de producto</p>
 				<div class="grid grid-cols-1 md:grid-cols-3 gap-3">
 					<input
 						type="text"
 						placeholder="Nombre"
 						value={newProduct.name}
 						oninput={(e) => (newProduct = { ...newProduct, name: e.currentTarget.value })}
-						class="border border-gray-300 rounded px-3 py-2"
+						class="border bd-soft bg-panel txt-primary rounded px-3 py-2"
 					/>
 					<input
 						type="text"
 						placeholder="Categoria"
 						value={newProduct.category}
 						oninput={(e) => (newProduct = { ...newProduct, category: e.currentTarget.value })}
-						class="border border-gray-300 rounded px-3 py-2"
+						class="border bd-soft bg-panel txt-primary rounded px-3 py-2"
 					/>
 					<input
 						type="text"
 						placeholder="Unidad"
 						value={newProduct.unit}
 						oninput={(e) => (newProduct = { ...newProduct, unit: e.currentTarget.value })}
-						class="border border-gray-300 rounded px-3 py-2"
+						class="border bd-soft bg-panel txt-primary rounded px-3 py-2"
 					/>
 					<input
 						type="number"
@@ -309,7 +313,7 @@
 						placeholder="Stock inicial"
 						value={newProduct.stock}
 						oninput={(e) => (newProduct = { ...newProduct, stock: parseNonNegativeInt(e.currentTarget.value) })}
-						class="border border-gray-300 rounded px-3 py-2"
+						class="border bd-soft bg-panel txt-primary rounded px-3 py-2"
 					/>
 					<input
 						type="number"
@@ -318,7 +322,7 @@
 						value={newProduct.minStock}
 						oninput={(e) =>
 							(newProduct = { ...newProduct, minStock: parseNonNegativeInt(e.currentTarget.value) })}
-						class="border border-gray-300 rounded px-3 py-2"
+						class="border bd-soft bg-panel txt-primary rounded px-3 py-2"
 					/>
 					<input
 						type="number"
@@ -328,14 +332,14 @@
 						value={newProduct.price}
 						oninput={(e) =>
 							(newProduct = { ...newProduct, price: parseNonNegativeFloat(e.currentTarget.value) })}
-						class="border border-gray-300 rounded px-3 py-2"
+						class="border bd-soft bg-panel txt-primary rounded px-3 py-2"
 					/>
 				</div>
 				<textarea
 					placeholder="Descripcion"
 					value={newProduct.description}
 					oninput={(e) => (newProduct = { ...newProduct, description: e.currentTarget.value })}
-					class="mt-3 w-full border border-gray-300 rounded px-3 py-2"
+					class="mt-3 w-full border bd-soft bg-panel txt-primary rounded px-3 py-2"
 					rows="2"
 				></textarea>
 				<div class="mt-3 flex gap-2">
@@ -346,41 +350,45 @@
 		{/if}
 	</Card>
 
-	<Card title="📦 Tabla de Productos (Editable)">
+	<Card
+		title="📦 Tabla de Productos (Editable)"
+		titleClass="text-violet-300"
+		class="glass-violet"
+	>
 		{#if filteredProducts.length === 0}
-			<p class="text-gray-500 text-center py-8">No hay productos para los filtros aplicados.</p>
+			<p class="txt-muted text-center py-8">No hay productos para los filtros aplicados.</p>
 		{:else}
-			<div class="overflow-x-auto">
-				<table class="w-full text-sm min-w-[1200px]">
+			<div class="overflow-x-auto radius-lg panel-surface-soft">
+				<table class="w-full fs-sm min-w-[1200px]">
 					<thead>
-						<tr class="border-b-2 border-gray-200 bg-gray-50 text-gray-700">
-							<th class="text-left py-3 px-3 font-semibold">Producto</th>
-							<th class="text-left py-3 px-3 font-semibold">Categoria</th>
-							<th class="text-left py-3 px-3 font-semibold">Unidad</th>
-							<th class="text-right py-3 px-3 font-semibold">Stock</th>
-							<th class="text-right py-3 px-3 font-semibold">Min.</th>
-							<th class="text-right py-3 px-3 font-semibold">Precio</th>
-							<th class="text-left py-3 px-3 font-semibold">Descripcion</th>
-							<th class="text-center py-3 px-3 font-semibold">Estado</th>
-							<th class="text-center py-3 px-3 font-semibold">Entrante</th>
-							<th class="text-center py-3 px-3 font-semibold">Saliente</th>
-							<th class="text-center py-3 px-3 font-semibold">Accion</th>
+						<tr class="border-b-2 bd-mid bg-slate-900/40 txt-subtle">
+							<th class="text-left py-3 px-3 fw-semibold">Producto</th>
+							<th class="text-left py-3 px-3 fw-semibold">Categoria</th>
+							<th class="text-left py-3 px-3 fw-semibold">Unidad</th>
+							<th class="text-right py-3 px-3 fw-semibold">Stock</th>
+							<th class="text-right py-3 px-3 fw-semibold">Min.</th>
+							<th class="text-right py-3 px-3 fw-semibold">Precio</th>
+							<th class="text-left py-3 px-3 fw-semibold">Descripcion</th>
+							<th class="text-center py-3 px-3 fw-semibold">Estado</th>
+							<th class="text-center py-3 px-3 fw-semibold">Entrante</th>
+							<th class="text-center py-3 px-3 fw-semibold">Saliente</th>
+							<th class="text-center py-3 px-3 fw-semibold">Accion</th>
 						</tr>
 					</thead>
 					<tbody>
 						{#each filteredProducts as product (product.id)}
 							{@const rowEditing = editingProductId === product.id}
-							<tr class="border-b border-gray-100 hover:bg-gray-50 align-top">
+							<tr class="border-b bd-strong hover:bg-panel/30 align-top">
 								<td class="py-2 px-3">
 									{#if rowEditing}
 										<input
 											type="text"
 											value={product.name}
 											oninput={(e) => updateDraft(product.id, 'name', e.currentTarget.value)}
-											class="w-44 border border-gray-300 rounded px-2 py-1"
+											class="w-44 border bd-soft bg-panel txt-primary rounded px-2 py-1"
 										/>
 									{:else}
-										<p class="w-44 truncate font-medium text-gray-800">{product.name}</p>
+										<p class="w-44 truncate fw-medium txt-primary">{product.name}</p>
 									{/if}
 								</td>
 								<td class="py-2 px-3">
@@ -389,10 +397,10 @@
 											type="text"
 											value={product.category}
 											oninput={(e) => updateDraft(product.id, 'category', e.currentTarget.value)}
-											class="w-32 border border-gray-300 rounded px-2 py-1"
+											class="w-32 border bd-soft bg-panel txt-primary rounded px-2 py-1"
 										/>
 									{:else}
-										<span class="text-gray-700">{product.category}</span>
+										<span class="txt-soft">{product.category}</span>
 									{/if}
 								</td>
 								<td class="py-2 px-3">
@@ -401,10 +409,10 @@
 											type="text"
 											value={product.unit}
 											oninput={(e) => updateDraft(product.id, 'unit', e.currentTarget.value)}
-											class="w-24 border border-gray-300 rounded px-2 py-1"
+											class="w-24 border bd-soft bg-panel txt-primary rounded px-2 py-1"
 										/>
 									{:else}
-										<span class="text-gray-700">{product.unit}</span>
+										<span class="txt-soft">{product.unit}</span>
 									{/if}
 								</td>
 								<td class="py-2 px-3 text-right">
@@ -414,10 +422,10 @@
 											min="0"
 											value={product.stock}
 											oninput={(e) => updateDraft(product.id, 'stock', e.currentTarget.value)}
-											class="w-20 border border-gray-300 rounded px-2 py-1 text-right"
+											class="w-20 border bd-soft bg-panel txt-primary rounded px-2 py-1 text-right"
 										/>
 									{:else}
-										<span class="font-medium text-gray-800">{product.stock}</span>
+										<span class="fw-medium txt-primary">{product.stock}</span>
 									{/if}
 								</td>
 								<td class="py-2 px-3 text-right">
@@ -427,10 +435,10 @@
 											min="0"
 											value={product.minStock}
 											oninput={(e) => updateDraft(product.id, 'minStock', e.currentTarget.value)}
-											class="w-20 border border-gray-300 rounded px-2 py-1 text-right"
+											class="w-20 border bd-soft bg-panel txt-primary rounded px-2 py-1 text-right"
 										/>
 									{:else}
-										<span class="text-gray-700">{product.minStock}</span>
+										<span class="txt-soft">{product.minStock}</span>
 									{/if}
 								</td>
 								<td class="py-2 px-3 text-right">
@@ -441,12 +449,12 @@
 											step="0.01"
 											value={product.price}
 											oninput={(e) => updateDraft(product.id, 'price', e.currentTarget.value)}
-											class="w-24 border border-gray-300 rounded px-2 py-1 text-right"
+											class="w-24 border bd-soft bg-panel txt-primary rounded px-2 py-1 text-right"
 										/>
 									{:else}
-										<span class="text-gray-700">{formatCurrency(Number(product.price) || 0)}</span>
+										<span class="txt-soft">{formatCurrency(Number(product.price) || 0)}</span>
 									{/if}
-									<p class="text-xs text-blue-700 mt-1">
+									<p class="text-xs text-blue-300 mt-1">
 										{formatCurrency((Number(product.price) || 0) * (Number(product.stock) || 0))}
 									</p>
 								</td>
@@ -456,10 +464,10 @@
 											rows="2"
 											value={product.description}
 											oninput={(e) => updateDraft(product.id, 'description', e.currentTarget.value)}
-											class="w-52 border border-gray-300 rounded px-2 py-1"
+											class="w-52 border bd-soft bg-panel txt-primary rounded px-2 py-1"
 										></textarea>
 									{:else}
-										<p class="w-52 text-gray-700">{product.description || '-'}</p>
+										<p class="w-52 txt-soft">{product.description || '-'}</p>
 									{/if}
 								</td>
 								<td class="py-2 px-3 text-center">
@@ -472,7 +480,7 @@
 											min="0"
 											value={stockMovements[product.id]?.incoming || 0}
 											oninput={(e) => updateMovement(product.id, 'incoming', e.currentTarget.value)}
-											class="w-20 border border-gray-300 rounded px-2 py-1 text-right"
+											class="w-20 border bd-soft bg-panel txt-primary rounded px-2 py-1 text-right"
 										/>
 										<button
 											type="button"
@@ -490,7 +498,7 @@
 											min="0"
 											value={stockMovements[product.id]?.outgoing || 0}
 											oninput={(e) => updateMovement(product.id, 'outgoing', e.currentTarget.value)}
-											class="w-20 border border-gray-300 rounded px-2 py-1 text-right"
+											class="w-20 border bd-soft bg-panel txt-primary rounded px-2 py-1 text-right"
 										/>
 										<button
 											type="button"

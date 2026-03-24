@@ -15,6 +15,55 @@
 	const label = $derived(getStatusLabel(status));
 </script>
 
-<span class={`inline-block px-3 py-1 rounded-full text-sm font-medium border ${colorClass}`}>
+<span class={`badge ${colorClass}`}>
 	{label}
 </span>
+
+<style>
+	.badge {
+		display: inline-block;
+		padding: 0.25rem 0.75rem;
+		border-radius: 999px;
+		font-size: 0.875rem;
+		font-weight: 500;
+		border: 1px solid transparent;
+	}
+
+	.badge.status-pending,
+	.badge.status-medium {
+		background: rgba(202, 138, 4, 0.25);
+		color: #fde68a;
+		border-color: rgba(202, 138, 4, 0.55);
+	}
+
+	.badge.status-delivered,
+	.badge.status-resolved,
+	.badge.status-active,
+	.badge.status-low {
+		background: rgba(5, 150, 105, 0.25);
+		color: #6ee7b7;
+		border-color: rgba(16, 185, 129, 0.55);
+	}
+
+	.badge.status-cancelled,
+	.badge.status-open,
+	.badge.status-high {
+		background: rgba(185, 28, 28, 0.25);
+		color: #fca5a5;
+		border-color: rgba(220, 38, 38, 0.55);
+	}
+
+	.badge.status-in-progress,
+	.badge.status-on-delivery {
+		background: rgba(30, 64, 175, 0.25);
+		color: #93c5fd;
+		border-color: rgba(37, 99, 235, 0.55);
+	}
+
+	.badge.status-off,
+	.badge.status-default {
+		background: rgba(51, 65, 85, 0.45);
+		color: #cbd5e1;
+		border-color: rgba(100, 116, 139, 0.6);
+	}
+</style>

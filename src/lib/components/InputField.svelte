@@ -30,12 +30,12 @@
 	} = $props();
 </script>
 
-<div class="mb-4">
+<div class="input-field">
 	{#if label}
-		<label for={id} class="block text-sm font-medium text-gray-700 mb-2">
+		<label for={id} class="input-label">
 			{label}
 			{#if required}
-				<span class="text-red-500">*</span>
+				<span class="input-required">*</span>
 			{/if}
 		</label>
 	{/if}
@@ -47,21 +47,7 @@
 		{placeholder}
 		{disabled}
 		{required}
-		class={`
-			w-full
-			px-4
-			py-2
-			border
-			rounded-lg
-			font-medium
-			transition-colors
-			duration-200
-			focus:outline-none
-			focus:ring-2
-			focus:ring-blue-500
-			${error ? 'border-red-500 focus:ring-red-500' : 'border-gray-300'}
-			${disabled ? 'bg-gray-100 cursor-not-allowed' : 'bg-white'}
-		`}
+		class={`input-control ${error ? 'input-control-error' : ''} ${disabled ? 'input-control-disabled' : ''}`}
 		oninput={oninput}
 		onchange={onchange}
 		onfocus={onfocus}
@@ -70,12 +56,73 @@
 	/>
 
 	{#if error}
-		<p class="mt-1 text-sm text-red-600">{error}</p>
+		<p class="input-error">{error}</p>
 	{/if}
 </div>
 
 <style>
 	input {
 		font-family: inherit;
+	}
+
+	.input-field {
+		margin-bottom: 1rem;
+	}
+
+	.input-label {
+		display: block;
+		margin-bottom: 0.5rem;
+		font-size: 0.875rem;
+		font-weight: 500;
+		color: #e2e8f0;
+	}
+
+	.input-required {
+		color: #f87171;
+	}
+
+	.input-control {
+		width: 100%;
+		padding: 0.5rem 1rem;
+		border: 1px solid #475569;
+		border-radius: 0.5rem;
+		font-weight: 500;
+		background: #334155;
+		color: #f1f5f9;
+		transition: border-color 0.2s ease, box-shadow 0.2s ease;
+	}
+
+	.input-control::placeholder {
+		color: #94a3b8;
+	}
+
+	.input-control:hover {
+		border-color: #64748b;
+	}
+
+	.input-control:focus {
+		outline: none;
+		border-color: #3b82f6;
+		box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.35);
+	}
+
+	.input-control-error {
+		border-color: #ef4444;
+	}
+
+	.input-control-error:focus {
+		border-color: #ef4444;
+		box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.35);
+	}
+
+	.input-control-disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+
+	.input-error {
+		margin-top: 0.25rem;
+		font-size: 0.875rem;
+		color: #f87171;
 	}
 </style>

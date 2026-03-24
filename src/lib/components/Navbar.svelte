@@ -1,20 +1,18 @@
 <!-- COMPONENTE: Barra de navegación -->
 <script>
 	/**
-	 * NAVBAR - BARRA DE NAVEGACIÓN
+	 * NAVBAR - BARRA DE NAVEGACIÓN - Tema Oscuro
 	 * Navegación principal de la aplicación según el rol del usuario
 	 * Incluye logo, menú, información del usuario y botón de logout
 	 */
 
 	import { goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
 	import { authStore } from '$lib/stores/authStore.js';
 
-	const title = '';
-
 	// Estado del menú en dispositivos móviles
-	let mobileMenuOpen = false;
-	let currentUser;
-	let showUserMenu = false;
+	let mobileMenuOpen = $state(false);
+	let currentUser = $state(null);
 
 	// Se suscribe a cambios de autenticación
 	authStore.subscribe((user) => {
@@ -26,7 +24,7 @@
 	 */
 	async function handleLogout() {
 		authStore.logout();
-		await goto('/');
+		await goto(resolve('/'));
 	}
 
 	/**
@@ -34,56 +32,55 @@
 	 */
 	async function navigateTo(path) {
 		mobileMenuOpen = false;
-		showUserMenu = false;
-		await goto(path);
+		await goto(resolve(path));
 	}
 </script>
 
-<nav class="bg-white shadow-md border-b border-gray-200">
-	<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-		<div class="flex justify-between items-center h-16">
+<nav class="navbar">
+	<div class="navbar-container">
+		<div class="navbar-row">
 			<!-- Logo y título -->
-			<div class="flex items-center">
+			<div class="navbar-brand-wrap">
 				<button
 					onclick={() => navigateTo(currentUser?.role === 'admin' ? '/admin/dashboard' : '/client/orders')}
-					class="flex items-center gap-2 hover:opacity-80 transition-opacity"
+					class="navbar-brand"
 				>
-					<span class="text-2xl">📦</span>
-					<span class="font-bold text-gray-800">Reparto</span>
+					<span class="navbar-logo">📦</span>
+					<span class="navbar-brand-text">Reparto</span>
 				</button>
 			</div>
 
 			<!-- Menú de navegación (Desktop) -->
-			<div class="hidden md:flex items-center gap-8">
+			<div class="navbar-desktop-menu">
 				{#if currentUser?.role === 'admin'}
 					<!-- Menú Admin -->
 					<button
 						onclick={() => navigateTo('/admin/dashboard')}
-						class="text-gray-700 hover:text-blue-600 transition-colors font-medium"
+						class="nav-link"
 					>
 						📊 Dashboard
 					</button>
 					<button
 						onclick={() => navigateTo('/admin/orders')}
-						class="text-gray-700 hover:text-blue-600 transition-colors font-medium"
+						class="nav-link"
 					>
 						📦 Pedidos
 					</button>
 					<button
 						onclick={() => navigateTo('/admin/stock')}
-						class="text-gray-700 hover:text-blue-600 transition-colors font-medium"
+						class="nav-link"
 					>
 						📋 Stock
 					</button>
 					<button
 						onclick={() => navigateTo('/admin/incidents')}
-						class="text-gray-700 hover:text-blue-600 transition-colors font-medium"
+						class="nav-link"
 					>
 						⚠️ Incidencias
 					</button>
 					<button
 						onclick={() => navigateTo('/admin/clients')}
-						class="text-gray-700 hover:text-blue-600 transition-colors font-medium"
+						class="nav-link"
 					>
 						👥 Clientes
 					</button>
@@ -91,19 +88,19 @@
 					<!-- Menú Cliente -->
 					<button
 						onclick={() => navigateTo('/client/orders')}
-						class="text-gray-700 hover:text-blue-600 transition-colors font-medium"
+						class="nav-link"
 					>
 						📦 Mis Pedidos
 					</button>
 					<button
 						onclick={() => navigateTo('/client/products')}
-						class="text-gray-700 hover:text-blue-600 transition-colors font-medium"
+						class="nav-link"
 					>
 						🛍️ Catálogo
 					</button>
 					<button
 						onclick={() => navigateTo('/client/profile')}
-						class="text-gray-700 hover:text-blue-600 transition-colors font-medium"
+						class="nav-link"
 					>
 						👤 Mi Perfil
 					</button>
@@ -111,91 +108,98 @@
 			</div>
 
 			<!-- Información del usuario y logout (Desktop) -->
-			<div class="hidden md:flex items-center gap-4">
-				<div class="text-right">
-					<p class="text-sm font-medium text-gray-800">{currentUser?.name || 'Usuario'}</p>
-					<p class="text-xs text-gray-500">{currentUser?.role === 'admin' ? 'Administrador' : 'Cliente'}</p>
+			<div class="navbar-desktop-user">
+				<div class="navbar-user-info">
+					<p class="navbar-user-name">{currentUser?.name || 'Usuario'}</p>
+					<p class="navbar-user-role">{currentUser?.role === 'admin' ? 'Administrador' : 'Cliente'}</p>
 				</div>
 
 				<button
 					onclick={handleLogout}
-					class="px-4 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors font-medium text-sm"
+					class="navbar-logout"
 				>
 					Salir
 				</button>
 			</div>
 
-			<!-- Botón de menú móvil -->
-			<button
-				onclick={() => (mobileMenuOpen = !mobileMenuOpen)}
-				class="md:hidden text-gray-700 hover:text-blue-600 transition-colors"
-			>
-				☰
-			</button>
+			<!-- Botón de menú móvil y usuario -->
+			<div class="navbar-mobile-actions">
+				<div class="navbar-mobile-user">
+					<p class="navbar-mobile-user-name">{currentUser?.name || 'Usuario'}</p>
+				</div>
+				<button
+					onclick={() => (mobileMenuOpen = !mobileMenuOpen)}
+					class="navbar-mobile-toggle"
+				>
+					☰
+				</button>
+			</div>
 		</div>
 
 		<!-- Menú móvil -->
 		{#if mobileMenuOpen}
-			<div class="md:hidden border-t border-gray-200 py-4 animate-slideDown">
-				{#if currentUser?.role === 'admin'}
-					<button
-						onclick={() => navigateTo('/admin/dashboard')}
-						class="block w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-100"
-					>
-						📊 Dashboard
-					</button>
-					<button
-						onclick={() => navigateTo('/admin/orders')}
-						class="block w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-100"
-					>
-						📦 Pedidos
-					</button>
-					<button
-						onclick={() => navigateTo('/admin/stock')}
-						class="block w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-100"
-					>
-						📋 Stock
-					</button>
-					<button
-						onclick={() => navigateTo('/admin/incidents')}
-						class="block w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-100"
-					>
-						⚠️ Incidencias
-					</button>
-					<button
-						onclick={() => navigateTo('/admin/clients')}
-						class="block w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-100"
-					>
-						👥 Clientes
-					</button>
-				{:else if currentUser?.role === 'client'}
-					<button
-						onclick={() => navigateTo('/client/orders')}
-						class="block w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-100"
-					>
-						📦 Mis Pedidos
-					</button>
-					<button
-						onclick={() => navigateTo('/client/products')}
-						class="block w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-100"
-					>
-						🛍️ Catálogo
-					</button>
-					<button
-						onclick={() => navigateTo('/client/profile')}
-						class="block w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-100"
-					>
-						👤 Mi Perfil
-					</button>
-				{/if}
+			<div class="navbar-mobile-menu animate-fadeIn">
+				<div class="navbar-mobile-list">
+					{#if currentUser?.role === 'admin'}
+						<button
+							onclick={() => navigateTo('/admin/dashboard')}
+							class="navbar-mobile-link"
+						>
+							📊 Dashboard
+						</button>
+						<button
+							onclick={() => navigateTo('/admin/orders')}
+							class="navbar-mobile-link"
+						>
+							📦 Pedidos
+						</button>
+						<button
+							onclick={() => navigateTo('/admin/stock')}
+							class="navbar-mobile-link"
+						>
+							📋 Stock
+						</button>
+						<button
+							onclick={() => navigateTo('/admin/incidents')}
+							class="navbar-mobile-link"
+						>
+							⚠️ Incidencias
+						</button>
+						<button
+							onclick={() => navigateTo('/admin/clients')}
+							class="navbar-mobile-link"
+						>
+							👥 Clientes
+						</button>
+					{:else if currentUser?.role === 'client'}
+						<button
+							onclick={() => navigateTo('/client/orders')}
+							class="navbar-mobile-link"
+						>
+							📦 Mis Pedidos
+						</button>
+						<button
+							onclick={() => navigateTo('/client/products')}
+							class="navbar-mobile-link"
+						>
+							🛍️ Catálogo
+						</button>
+						<button
+							onclick={() => navigateTo('/client/profile')}
+							class="navbar-mobile-link"
+						>
+							👤 Mi Perfil
+						</button>
+					{/if}
 
-				<div class="border-t border-gray-200 mt-2 pt-2">
-					<button
-						onclick={handleLogout}
-						class="block w-full text-left px-4 py-2 text-red-700 hover:bg-red-50"
-					>
-						🚪 Salir
-					</button>
+					<div class="navbar-mobile-divider">
+						<button
+							onclick={handleLogout}
+							class="navbar-mobile-logout"
+						>
+							🚪 Salir
+						</button>
+					</div>
 				</div>
 			</div>
 		{/if}
@@ -203,7 +207,219 @@
 </nav>
 
 <style>
-	@keyframes slideDown {
+	.navbar {
+		position: sticky;
+		top: 0;
+		z-index: 40;
+		background: #0f172a;
+		border-bottom: 1px solid #334155;
+		box-shadow: 0 8px 18px rgba(0, 0, 0, 0.28);
+	}
+
+	.navbar-container {
+		max-width: 80rem;
+		margin: 0 auto;
+		padding: 0 1rem;
+	}
+
+	.navbar-row {
+		height: 4rem;
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+	}
+
+	.navbar-brand-wrap {
+		min-width: 0;
+	}
+
+	.navbar-brand {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.5rem;
+		transition: opacity 0.2s ease;
+	}
+
+	.navbar-brand:hover {
+		opacity: 0.85;
+	}
+
+	.navbar-logo {
+		font-size: 1.5rem;
+	}
+
+	.navbar-brand-text {
+		font-weight: 700;
+		color: #f1f5f9;
+		display: none;
+	}
+
+	.navbar-desktop-menu,
+	.navbar-desktop-user {
+		display: none;
+	}
+
+	.nav-link {
+		padding: 0.5rem 1rem;
+		border-radius: 0.5rem;
+		font-size: 0.875rem;
+		font-weight: 500;
+		color: #cbd5e1;
+		transition: color 0.2s ease, background-color 0.2s ease;
+	}
+
+	.nav-link:hover {
+		color: #f1f5f9;
+		background: #1e293b;
+	}
+
+	.navbar-user-info {
+		text-align: right;
+	}
+
+	.navbar-user-name {
+		margin: 0;
+		font-size: 0.875rem;
+		font-weight: 500;
+		color: #f1f5f9;
+	}
+
+	.navbar-user-role {
+		margin: 0;
+		font-size: 0.75rem;
+		color: #94a3b8;
+	}
+
+	.navbar-logout {
+		padding: 0.5rem 1rem;
+		font-size: 0.875rem;
+		font-weight: 500;
+		color: #fff;
+		background: #dc2626;
+		border: 1px solid #ef4444;
+		border-radius: 0.5rem;
+		transition: background-color 0.2s ease;
+	}
+
+	.navbar-logout:hover {
+		background: #ef4444;
+	}
+
+	.navbar-mobile-actions {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+	}
+
+	.navbar-mobile-user {
+		text-align: right;
+		font-size: 0.875rem;
+	}
+
+	.navbar-mobile-user-name {
+		margin: 0;
+		max-width: 10rem;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-weight: 500;
+		color: #f1f5f9;
+	}
+
+	.navbar-mobile-toggle {
+		padding: 0.5rem;
+		color: #cbd5e1;
+		border-radius: 0.5rem;
+		transition: color 0.2s ease, background-color 0.2s ease;
+	}
+
+	.navbar-mobile-toggle:hover {
+		color: #f1f5f9;
+		background: #1e293b;
+	}
+
+	.navbar-mobile-menu {
+		border-top: 1px solid #334155;
+		padding: 1rem 0;
+		background: #1e293b;
+	}
+
+	.navbar-mobile-list {
+		display: grid;
+		gap: 0.25rem;
+	}
+
+	.navbar-mobile-link,
+	.navbar-mobile-logout {
+		display: block;
+		width: 100%;
+		text-align: left;
+		padding: 0.5rem 1rem;
+		border-radius: 0.5rem;
+		transition: color 0.2s ease, background-color 0.2s ease;
+	}
+
+	.navbar-mobile-link {
+		color: #cbd5e1;
+	}
+
+	.navbar-mobile-link:hover {
+		color: #f1f5f9;
+		background: #334155;
+	}
+
+	.navbar-mobile-divider {
+		margin-top: 0.5rem;
+		padding-top: 0.5rem;
+		border-top: 1px solid #334155;
+	}
+
+	.navbar-mobile-logout {
+		font-weight: 500;
+		color: #fca5a5;
+	}
+
+	.navbar-mobile-logout:hover {
+		color: #fecaca;
+		background: rgba(127, 29, 29, 0.4);
+	}
+
+	@media (min-width: 640px) {
+		.navbar-container {
+			padding: 0 1.5rem;
+		}
+
+		.navbar-brand-text {
+			display: inline;
+		}
+	}
+
+	@media (min-width: 768px) {
+		.navbar-desktop-menu {
+			display: flex;
+			align-items: center;
+			gap: 0.25rem;
+		}
+
+		.navbar-desktop-user {
+			display: flex;
+			align-items: center;
+			gap: 1rem;
+		}
+
+		.navbar-mobile-actions,
+		.navbar-mobile-menu {
+			display: none;
+		}
+	}
+
+	@media (min-width: 1024px) {
+		.navbar-container {
+			padding: 0 2rem;
+		}
+	}
+
+	@keyframes fadeIn {
 		from {
 			opacity: 0;
 			transform: translateY(-10px);
@@ -214,7 +430,7 @@
 		}
 	}
 
-	.animate-slideDown {
-		animation: slideDown 0.3s ease-in-out;
+	.animate-fadeIn {
+		animation: fadeIn 0.3s ease-in-out;
 	}
 </style>

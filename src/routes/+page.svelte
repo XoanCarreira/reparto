@@ -7,6 +7,7 @@
 	 */
 
 	import { goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
 	import { authStore } from '$lib/stores/authStore.js';
 	import Button from '$lib/components/Button.svelte';
 	import InputField from '$lib/components/InputField.svelte';
@@ -60,11 +61,11 @@
 			await new Promise((resolve) => setTimeout(resolve, 500)); // Simula pequeño delay
 
 			if (result.user.role === 'admin') {
-				await goto('/admin/dashboard');
+				await goto(resolve('/admin/dashboard'));
 			} else if (result.user.role === 'client') {
-				await goto('/client/orders');
+				await goto(resolve('/client/orders'));
 			}
-		} catch (err) {
+		} catch {
 			error = 'Error al iniciar sesión. Por favor intenta nuevamente.';
 			isSubmitting = false;
 		}
@@ -97,28 +98,26 @@
 	<title>Login - Reparto</title>
 </svelte:head>
 
-<div class="min-h-screen bg-gradient-to-br from-blue-600 to-blue-800 flex items-center justify-center px-4 py-12">
-	<div class="w-full max-w-md">
+<div class="login-page">
+	<div class="login-shell">
 		<!-- Encabezado -->
-		<div class="text-center mb-8 animate-fadeIn">
-			<h1 class="text-4xl font-bold text-white mb-2">📦 Reparto</h1>
-			<p class="text-blue-100 text-lg">Sistema de Gestión de Entregas</p>
+		<div class="login-header animate-fadeIn">
+			<h1 class="login-title">📦 Reparto</h1>
+			<p class="login-subtitle">Sistema de Gestión de Entregas</p>
 		</div>
 
 		<!-- Tarjeta de login -->
-		<div class="bg-white rounded-lg shadow-2xl p-8 animate-slideInLeft">
-			<h2 class="text-2xl font-bold text-gray-800 mb-1">Bienvenido</h2>
-			<p class="text-gray-600 mb-6">Inicia sesión en tu cuenta</p>
+		<div class="login-card animate-slideInLeft">
+			<h2 class="login-card-title">Bienvenido</h2>
+			<p class="login-card-subtitle">Inicia sesión en tu cuenta</p>
 
 			{#if error}
-				<div
-					class="mb-4 p-4 bg-red-100 border border-red-400 text-red-700 rounded-lg text-sm animate-fadeIn"
-				>
+				<div class="login-error animate-fadeIn">
 					⚠️ {error}
 				</div>
 			{/if}
 
-			<form onsubmit={(e) => { e.preventDefault(); handleLogin(); }} class="space-y-4">
+			<form onsubmit={(e) => { e.preventDefault(); handleLogin(); }} class="login-form">
 				<!-- Campo Email -->
 				<InputField
 					label="Email"
@@ -148,7 +147,7 @@
 					variant="primary"
 					size="lg"
 					loading={isSubmitting}
-					class="w-full mt-6"
+					class="login-submit"
 					onclick={handleLogin}
 				>
 					{#if isSubmitting}
@@ -160,14 +159,14 @@
 			</form>
 
 			<!-- Credenciales de prueba para desarrollo -->
-			<div class="mt-8 pt-6 border-t border-gray-200">
-				<p class="text-sm text-gray-600 mb-3 font-medium">Credenciales de prueba:</p>
+			<div class="test-credentials">
+				<p class="test-credentials-title">Credenciales de prueba:</p>
 
-				<div class="space-y-2">
+				<div class="test-credentials-list">
 					<button
 						type="button"
 						onclick={() => fillTestCredentials('admin')}
-						class="w-full text-left text-sm px-3 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded border border-blue-200 transition-colors"
+						class="test-credential-btn test-credential-btn-admin"
 					>
 						👤 Admin: admin@empresa.com
 					</button>
@@ -175,20 +174,20 @@
 					<button
 						type="button"
 						onclick={() => fillTestCredentials('client')}
-						class="w-full text-left text-sm px-3 py-2 bg-green-50 hover:bg-green-100 text-green-700 rounded border border-green-200 transition-colors"
+						class="test-credential-btn test-credential-btn-client"
 					>
 						🏪 Cliente: cliente1@empresa.com
 					</button>
 				</div>
 
-				<p class="text-xs text-gray-500 mt-2">
+				<p class="test-credentials-note">
 					Admin: admin123 • Cliente: cliente123
 				</p>
 			</div>
 		</div>
 
 		<!-- Pie de página -->
-		<p class="text-center text-blue-100 text-sm mt-8">
+		<p class="login-footer">
 			Sistema de entregas seguro y escalable para tu negocio
 		</p>
 	</div>
@@ -220,6 +219,157 @@
 		to {
 			opacity: 1;
 			transform: translateX(0);
+		}
+	}
+
+	.login-page {
+		min-height: 100vh;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		background: linear-gradient(135deg, #0f172a 0%, #1e293b 55%, #0f172a 100%);
+		padding: 3.5rem 1.5rem;
+	}
+
+	.login-shell {
+		width: 100%;
+		max-width: 28rem;
+	}
+
+	.login-header {
+		text-align: center;
+		margin-bottom: 2rem;
+	}
+
+	.login-title {
+		font-size: 2.25rem;
+		line-height: 1.1;
+		font-weight: 700;
+		color: #f1f5f9;
+		margin: 0 0 0.5rem;
+	}
+
+	.login-subtitle {
+		margin: 0;
+		font-size: 1.125rem;
+		color: #94a3b8;
+	}
+
+	.login-card {
+		background: #1e293b;
+		border: 1px solid #334155;
+		border-radius: 0.5rem;
+		box-shadow: 0 24px 50px rgba(0, 0, 0, 0.45);
+		padding: 2rem;
+	}
+
+	.login-card-title {
+		margin: 0 0 0.25rem;
+		font-size: 1.5rem;
+		font-weight: 700;
+		color: #f1f5f9;
+	}
+
+	.login-card-subtitle {
+		margin: 0 0 1.5rem;
+		color: #94a3b8;
+	}
+
+	.login-error {
+		margin-bottom: 1rem;
+		padding: 1rem;
+		background: rgba(127, 29, 29, 0.45);
+		border: 1px solid rgba(220, 38, 38, 0.55);
+		color: #fca5a5;
+		border-radius: 0.5rem;
+		font-size: 0.875rem;
+	}
+
+	.login-form {
+		display: grid;
+		gap: 1rem;
+	}
+
+	:global(.login-submit) {
+		width: 100%;
+		margin-top: 1.5rem;
+	}
+
+	.test-credentials {
+		margin-top: 2rem;
+		padding-top: 1.5rem;
+		border-top: 1px solid #334155;
+	}
+
+	.test-credentials-title {
+		margin: 0 0 0.75rem;
+		font-size: 0.875rem;
+		font-weight: 600;
+		color: #cbd5e1;
+	}
+
+	.test-credentials-list {
+		display: grid;
+		gap: 0.5rem;
+	}
+
+	.test-credential-btn {
+		display: block;
+		width: 100%;
+		text-align: left;
+		font-size: 0.875rem;
+		padding: 0.5rem 0.75rem;
+		border-radius: 0.375rem;
+		transition: background-color 0.2s ease;
+		cursor: pointer;
+	}
+
+	.test-credential-btn-admin {
+		background: rgba(30, 58, 138, 0.35);
+		border: 1px solid rgba(37, 99, 235, 0.5);
+		color: #93c5fd;
+	}
+
+	.test-credential-btn-admin:hover {
+		background: rgba(30, 64, 175, 0.5);
+	}
+
+	.test-credential-btn-client {
+		background: rgba(6, 95, 70, 0.35);
+		border: 1px solid rgba(16, 185, 129, 0.5);
+		color: #6ee7b7;
+	}
+
+	.test-credential-btn-client:hover {
+		background: rgba(6, 120, 85, 0.5);
+	}
+
+	.test-credentials-note {
+		margin: 0.5rem 0 0;
+		font-size: 0.75rem;
+		color: #64748b;
+	}
+
+	.login-footer {
+		margin-top: 2rem;
+		text-align: center;
+		font-size: 0.875rem;
+		color: #94a3b8;
+	}
+
+	@media (min-width: 640px) {
+		.login-page {
+			padding: 4rem 2rem;
+		}
+
+		.login-card {
+			padding: 2.5rem;
+		}
+	}
+
+	@media (min-width: 1024px) {
+		.login-page {
+			padding: 5rem 3rem;
 		}
 	}
 </style>

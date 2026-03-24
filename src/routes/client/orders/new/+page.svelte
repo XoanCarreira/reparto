@@ -182,7 +182,7 @@
 {#if showToast}
 	<div class="fixed top-4 right-4 z-50 animate-slideInRight">
 		<div
-			class={`rounded-lg shadow-lg border px-6 py-4 flex items-center gap-3 ${
+			class={`radius-lg shadow-lg border px-6 py-4 flex items-center gap-3 ${
 				toastType === 'success'
 					? 'bg-green-50 border-green-300 text-green-900'
 					: toastType === 'error'
@@ -191,27 +191,27 @@
 			}`}
 		>
 			{#if toastType === 'success'}
-				<span class="text-2xl">✓</span>
+				<span class="fs-2xl">✓</span>
 			{:else if toastType === 'error'}
-				<span class="text-2xl">✕</span>
+				<span class="fs-2xl">✕</span>
 			{:else}
-				<span class="text-2xl">ℹ</span>
+				<span class="fs-2xl">ℹ</span>
 			{/if}
-			<p class="font-medium">{toastMessage}</p>
+			<p class="fw-medium">{toastMessage}</p>
 		</div>
 	</div>
 {/if}
 
-<div class="space-y-6 animate-fadeIn">
+<div class="page-root animate-fadeIn full-width-desktop">
 	<!-- Encabezado -->
-	<div class="flex justify-between items-center">
+	<div class="page-header page-header-row">
 		<div>
-			<h1 class="text-3xl font-bold text-gray-900">➕ Crear Nuevo Pedido</h1>
-			<p class="text-gray-600 mt-2">Selecciona los productos que necesitas</p>
+			<h1 class="page-title">➕ Crear Nuevo Pedido</h1>
+			<p class="page-subtitle">Selecciona los productos que necesitas</p>
 		</div>
 		<a
 			href={resolve('/client/orders')}
-			class="text-blue-600 hover:text-blue-800 font-medium flex items-center gap-2"
+			class="text-blue-600 hover:text-blue-800 fw-medium flex items-center gap-2"
 		>
 			← Volver a pedidos
 		</a>
@@ -221,25 +221,25 @@
 	<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
 		<!-- Catálogo de productos (columna izquierda - 2 columnas) -->
 		<div class="lg:col-span-2">
-			<Card title="🛍️ Catálogo de Productos">
+			<Card title="🛍️ Catálogo de Productos" titleClass="text-blue-300" class="glass-blue">
 				{#if allProducts.length === 0}
-					<p class="text-gray-500 text-center py-8">No hay productos disponibles</p>
+					<p class="txt-muted text-center py-8">No hay productos disponibles</p>
 				{:else}
 					<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
 						{#each allProducts as product (product.id)}
-							<div class="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+							<div class="panel-surface-soft radius-lg p-4 hover:shadow-md transition-shadow">
 								<!-- Info del producto -->
 								<div class="mb-3">
-									<p class="font-bold text-gray-900 text-lg">{product.name}</p>
-									<p class="text-sm text-gray-600 mb-2">{product.description}</p>
+									<p class="fw-bold txt-primary fs-lg">{product.name}</p>
+									<p class="fs-sm txt-muted mb-2">{product.description}</p>
 									<div class="flex justify-between items-center mb-3">
 										<div>
-											<p class="text-xs text-gray-600">Precio por {product.unit}</p>
-											<p class="text-lg font-bold text-blue-600">{formatCurrency(product.price)}</p>
+											<p class="text-xs txt-muted">Precio por {product.unit}</p>
+											<p class="fs-lg fw-bold text-blue-600">{formatCurrency(product.price)}</p>
 										</div>
 										<div class="text-right">
-											<p class="text-xs text-gray-600">Stock disponible</p>
-											<p class="text-lg font-bold text-green-600">{product.stock}</p>
+											<p class="text-xs txt-muted">Stock disponible</p>
+											<p class="fs-lg fw-bold text-green-600">{product.stock}</p>
 										</div>
 									</div>
 								</div>
@@ -261,7 +261,7 @@
 											max={product.stock}
 											value={cart[product.id] || 0}
 											oninput={(e) => setCartQuantity(product.id, e.currentTarget.value)}
-											class="w-full px-2 py-1 text-center border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+											class="w-full px-2 py-1 text-center border bd-soft bg-panel txt-primary rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
 										/>
 									</div>
 
@@ -275,7 +275,7 @@
 								</div>
 
 								{#if cart[product.id] && cart[product.id] > 0}
-									<div class="bg-blue-50 rounded p-2 text-center text-sm text-blue-700 font-medium">
+									<div class="panel-surface-soft rounded p-2 text-center fs-sm text-blue-300 fw-medium">
 										{formatCurrency(product.price * cart[product.id])} por {cart[product.id]} {product.unit}
 									</div>
 								{/if}
@@ -289,22 +289,22 @@
 		<!-- Carrito (columna derecha) -->
 		<div class="lg:col-span-1">
 			<!-- Resumen del carrito -->
-			<Card title="🛒 Tu Carrito" noPadding={true}>
+			<Card title="🛒 Tu Carrito" titleClass="text-amber-300" class="glass-amber" noPadding={true}>
 				<div class="p-6">
 					{#if getCartItemsCount() === 0}
-						<p class="text-gray-500 text-center py-8">El carrito está vacío</p>
+						<p class="txt-muted text-center py-8">El carrito está vacío</p>
 					{:else}
 						<!-- Items en el carrito -->
 						<div class="space-y-3 mb-4">
 							{#each getCartItems() as item (item.productId)}
-								<div class="flex justify-between items-start pb-3 border-b border-gray-200">
+								<div class="flex justify-between items-start pb-3 border-b border-white/20">
 									<div>
-										<p class="font-medium text-gray-900">{item.product.name}</p>
-										<p class="text-sm text-gray-600">
+										<p class="fw-medium txt-primary">{item.product.name}</p>
+										<p class="fs-sm txt-muted">
 											{item.quantity}× {formatCurrency(item.product.price)}
 										</p>
 									</div>
-									<p class="font-bold text-blue-600">
+									<p class="fw-bold text-blue-600">
 										{formatCurrency(item.product.price * item.quantity)}
 									</p>
 								</div>
@@ -312,32 +312,32 @@
 						</div>
 
 						<!-- Total -->
-						<div class="bg-blue-50 rounded-lg p-4 mb-4">
+						<div class="panel-surface-soft radius-lg p-4 mb-4">
 							<div class="flex justify-between items-center">
-								<span class="font-medium text-gray-700">Total:</span>
-								<span class="text-2xl font-bold text-blue-600">{formatCurrency(getCartTotal())}</span>
+								<span class="fw-medium txt-soft">Total:</span>
+								<span class="fs-2xl fw-bold text-blue-600">{formatCurrency(getCartTotal())}</span>
 							</div>
-							<p class="text-sm text-gray-600 mt-2">{getCartItemsCount()} items</p>
+							<p class="fs-sm txt-muted mt-2">{getCartItemsCount()} items</p>
 						</div>
 
 						<!-- Info de entrega -->
 						{@const deliveryInfo = getDeliveryInfo()}
 						{#if deliveryInfo}
-							<div class="bg-gray-50 rounded-lg p-3 mb-4 text-sm">
-								<p class="font-medium text-gray-900 mb-2">Próxima entrega</p>
-								<p class="text-gray-600">{deliveryInfo.name}</p>
-								<p class="text-gray-600">{deliveryInfo.deliveryTime}</p>
+							<div class="panel-surface-soft radius-lg p-3 mb-4 fs-sm">
+								<p class="fw-medium txt-primary mb-2">Próxima entrega</p>
+								<p class="txt-muted">{deliveryInfo.name}</p>
+								<p class="txt-muted">{deliveryInfo.deliveryTime}</p>
 							</div>
 						{/if}
 
 						<!-- Campo de notas -->
 						<div class="mb-4">
-							<label for="order-notes" class="block text-sm font-medium text-gray-700 mb-2">Notas especiales</label>
+							<label for="order-notes" class="block fs-sm fw-medium txt-soft mb-2">Notas especiales</label>
 							<textarea
 								id="order-notes"
 								bind:value={notes}
 								placeholder="Instrucciones adicionales para la entrega..."
-								class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm resize-none"
+								class="w-full px-3 py-2 border bd-soft bg-panel txt-primary radius-lg focus:outline-none focus:ring-2 focus:ring-blue-500 fs-sm resize-none"
 								rows="3"
 							></textarea>
 						</div>
@@ -353,21 +353,21 @@
 							Revisar y confirmar
 						</Button>
 					{:else}
-						<div class="rounded-lg border border-blue-200 bg-blue-50 p-4 space-y-4">
-							<p class="font-semibold text-blue-900">Confirmación del pedido</p>
+						<div class="radius-lg panel-surface-soft p-4 space-y-4">
+							<p class="fw-semibold text-blue-900">Confirmación del pedido</p>
 
 							<!-- Listado detallado de productos -->
-							<div class="bg-white rounded-lg p-3 border border-blue-100 space-y-2 max-h-48 overflow-y-auto">
-								<p class="text-xs font-semibold text-gray-700 uppercase tracking-wide">Productos en el pedido</p>
+							<div class="panel-surface-soft radius-lg p-3 space-y-2 max-h-48 overflow-y-auto">
+								<p class="text-xs fw-semibold txt-soft uppercase tracking-wide">Productos en el pedido</p>
 								{#each getCartItems() as item (item.productId)}
-									<div class="flex justify-between items-start text-sm pb-2 border-b border-gray-100 last:border-b-0">
+									<div class="flex justify-between items-start fs-sm pb-2 border-b border-white/15 last:border-b-0">
 										<div class="flex-1">
-											<p class="font-medium text-gray-900">{item.product.name}</p>
-											<p class="text-xs text-gray-600">
+											<p class="fw-medium txt-primary">{item.product.name}</p>
+											<p class="text-xs txt-muted">
 												{item.quantity} × {formatCurrency(item.product.price)}
 											</p>
 										</div>
-										<p class="font-semibold text-blue-600 text-right">
+										<p class="fw-semibold text-blue-600 text-right">
 											{formatCurrency(item.product.price * item.quantity)}
 										</p>
 									</div>
@@ -375,11 +375,11 @@
 							</div>
 
 							<!-- Resumen de totales -->
-							<div class="space-y-1 text-sm text-blue-900">
+							<div class="space-y-1 fs-sm text-blue-200">
 								<p>Total de productos: <strong>{getCartItemsCount()}</strong></p>
 								<p>Líneas de pedido: <strong>{getCartItems().length}</strong></p>
-								<div class="pt-2 border-t border-blue-200 mt-2">
-									<p class="text-lg font-bold">Total a pagar: {formatCurrency(getCartTotal())}</p>
+								<div class="pt-2 border-t border-white/20 mt-2">
+									<p class="fs-lg fw-bold">Total a pagar: {formatCurrency(getCartTotal())}</p>
 								</div>
 							</div>
 
@@ -404,7 +404,7 @@
 
 					<a
 						href={resolve('/client/orders')}
-						class="block text-center text-gray-600 hover:text-gray-800 font-medium py-2 transition-colors"
+						class="block text-center txt-muted hover:txt-subtle fw-medium py-2 transition-colors"
 					>
 						Cancelar
 					</a>

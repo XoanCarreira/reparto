@@ -7,11 +7,12 @@
 	 */
 
 	import Card from '$lib/components/Card.svelte';
+	import { resolve } from '$app/paths';
 	import { productsStore } from '$lib/stores/dataStore.js';
 	import { formatCurrency } from '$lib/utils/helpers.js';
 
-	let allProducts = [];
-	let selectedCategory = 'all';
+	let allProducts = $state([]);
+	let selectedCategory = $state('all');
 
 	// Se suscribe a productos
 	productsStore.subscribe(($products) => {
@@ -50,24 +51,24 @@
 	<title>Catálogo - Reparto</title>
 </svelte:head>
 
-<div class="space-y-6 animate-fadeIn">
+<div class="page-root animate-fadeIn full-width-desktop">
 	<!-- Encabezado -->
-	<div>
-		<h1 class="text-3xl font-bold text-gray-900">🛍️ Catálogo de Productos</h1>
-		<p class="text-gray-600 mt-2">Explora nuestros productos disponibles</p>
+	<div class="page-header">
+		<h1 class="page-title">🛍️ Catálogo de Productos</h1>
+		<p class="page-subtitle">Explora nuestros productos disponibles</p>
 	</div>
 
 	<!-- Filtro por categoría -->
 	{#if allProducts.length > 0}
-		<div class="bg-white rounded-lg border border-gray-200 p-4 sticky top-0 z-10">
-			<p class="text-sm font-medium text-gray-700 mb-3">Filtrar por categoría:</p>
+		<div class="panel-surface radius-lg p-4 sticky top-0 z-10">
+			<p class="fs-sm fw-medium txt-subtle mb-3">Filtrar por categoría:</p>
 			<div class="flex flex-wrap gap-2">
 				<button
 					onclick={() => (selectedCategory = 'all')}
-					class={`px-4 py-2 rounded-lg font-medium transition-colors ${
+					class={`px-4 py-2 radius-lg fw-medium transition-colors ${
 						selectedCategory === 'all'
-							? 'bg-blue-100 text-blue-700 border border-blue-300'
-							: 'bg-gray-100 text-gray-700 border border-gray-300 hover:bg-gray-200'
+							? 'bg-blue-900/40 text-blue-200 border border-blue-500/50'
+							: 'bg-panel txt-soft border bd-soft hover:bg-panel-soft'
 					}`}
 				>
 					Todos ({allProducts.length})
@@ -77,10 +78,10 @@
 					{@const count = allProducts.filter((p) => p.category === category).length}
 					<button
 						onclick={() => (selectedCategory = category)}
-						class={`px-4 py-2 rounded-lg font-medium transition-colors ${
+						class={`px-4 py-2 radius-lg fw-medium transition-colors ${
 							selectedCategory === category
-								? 'bg-blue-100 text-blue-700 border border-blue-300'
-								: 'bg-gray-100 text-gray-700 border border-gray-300 hover:bg-gray-200'
+								? 'bg-blue-900/40 text-blue-200 border border-blue-500/50'
+								: 'bg-panel txt-soft border bd-soft hover:bg-panel-soft'
 						}`}
 					>
 						{category} ({count})
@@ -94,29 +95,29 @@
 	<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
 		{#each filteredProducts() as product (product.id)}
 			{@const stockStatus = getStockStatus(product)}
-			<Card>
+			<Card class="glass-slate">
 				<div class="h-full flex flex-col">
 					<!-- Encabezado del producto -->
 					<div class="mb-4">
 						<div class="flex justify-between items-start mb-2">
-							<h3 class="text-lg font-bold text-gray-900 flex-1">{product.name}</h3>
-							<span class={`text-xs font-medium px-3 py-1 rounded-full whitespace-nowrap ml-2 ${stockStatus.color}`}>
+							<h3 class="fs-lg fw-bold txt-primary flex-1">{product.name}</h3>
+							<span class={`text-xs fw-medium px-3 py-1 radius-full whitespace-nowrap ml-2 ${stockStatus.color}`}>
 								{stockStatus.label}
 							</span>
 						</div>
-						<p class="text-sm text-gray-600">{product.description}</p>
+						<p class="fs-sm txt-muted">{product.description}</p>
 					</div>
 
 					<!-- Info de stock -->
-					<div class="bg-gray-50 rounded-lg p-3 mb-4">
+					<div class="panel-surface-soft radius-lg p-3 mb-4">
 						<div class="flex justify-between items-center">
 							<div>
-								<p class="text-xs text-gray-600">Stock disponible</p>
-								<p class="text-lg font-bold text-gray-900">{product.stock}</p>
+								<p class="text-xs txt-muted">Stock disponible</p>
+								<p class="fs-lg fw-bold txt-primary">{product.stock}</p>
 							</div>
 							<div class="text-right">
-								<p class="text-xs text-gray-600">Unidad</p>
-								<p class="font-medium text-gray-900">{product.unit}</p>
+								<p class="text-xs txt-muted">Unidad</p>
+								<p class="fw-medium txt-primary">{product.unit}</p>
 							</div>
 						</div>
 					</div>
@@ -124,20 +125,20 @@
 					<!-- Categoría y precio -->
 					<div class="space-y-2 mb-4 flex-1">
 						<div>
-							<p class="text-xs text-gray-600">Categoría</p>
-							<p class="text-sm font-medium text-gray-900">{product.category}</p>
+							<p class="text-xs txt-muted">Categoría</p>
+							<p class="fs-sm fw-medium txt-primary">{product.category}</p>
 						</div>
-						<div class="bg-blue-50 rounded-lg p-3">
-							<p class="text-xs text-gray-600">Precio por {product.unit}</p>
-							<p class="text-2xl font-bold text-blue-600">{formatCurrency(product.price)}</p>
+						<div class="panel-surface-soft radius-lg p-3">
+							<p class="text-xs txt-muted">Precio por {product.unit}</p>
+							<p class="fs-2xl fw-bold text-blue-300">{formatCurrency(product.price)}</p>
 						</div>
 					</div>
 
 					<!-- Botón de agregar -->
 					<div>
 						<a
-							href="/client/orders/new"
-							class="block w-full text-center px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors font-medium text-sm"
+							href={resolve('/client/orders/new')}
+							class="block w-full text-center px-4 py-2 panel-surface-soft text-blue-300 radius-lg hover:bg-panel-soft/70 transition-colors fw-medium fs-sm"
 						>
 							→ Agregar al pedido
 						</a>
@@ -149,9 +150,9 @@
 
 	<!-- Sin productos -->
 	{#if filteredProducts().length === 0}
-		<Card>
+		<Card class="glass-slate">
 			<div class="text-center py-12">
-				<p class="text-gray-500 text-lg">No hay productos en esta categoría</p>
+				<p class="txt-muted fs-lg">No hay productos en esta categoría</p>
 			</div>
 		</Card>
 	{/if}

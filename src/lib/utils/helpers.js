@@ -109,17 +109,20 @@ export function isValidEmail(email) {
  */
 export function getStatusColor(status) {
 	const colors = {
-		pending: 'bg-yellow-100 text-yellow-800 border-yellow-300',
-		delivered: 'bg-green-100 text-green-800 border-green-300',
-		cancelled: 'bg-red-100 text-red-800 border-red-300',
-		open: 'bg-red-100 text-red-800 border-red-300',
-		'in_progress': 'bg-blue-100 text-blue-800 border-blue-300',
-		resolved: 'bg-green-100 text-green-800 border-green-300',
-		active: 'bg-green-100 text-green-800 border-green-300',
-		off: 'bg-gray-100 text-gray-800 border-gray-300',
-		on_delivery: 'bg-blue-100 text-blue-800 border-blue-300'
+		pending: 'status-pending',
+		delivered: 'status-delivered',
+		cancelled: 'status-cancelled',
+		open: 'status-open',
+		'in_progress': 'status-in-progress',
+		resolved: 'status-resolved',
+		active: 'status-active',
+		off: 'status-off',
+		on_delivery: 'status-on-delivery',
+		high: 'status-high',
+		medium: 'status-medium',
+		low: 'status-low'
 	};
-	return colors[status] || 'bg-gray-100 text-gray-800 border-gray-300';
+	return colors[status] || 'status-default';
 }
 
 /**

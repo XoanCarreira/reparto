@@ -1,11 +1,11 @@
 <!-- COMPONENTE: Botón reutilizable -->
 <script>
 	/**
-	 * BOTÓN REUTILIZABLE
+	 * BOTÓN REUTILIZABLE - Tema Oscuro
 	 * Componente de botón flexible con variantes de estilo
 	 *
 	 * Props:
-	 * - variant: 'primary', 'secondary', 'danger' (default: 'primary')
+	 * - variant: 'primary', 'secondary', 'danger', 'success' (default: 'primary')
 	 * - size: 'sm', 'md', 'lg' (default: 'md')
 	 * - disabled: boolean (default: false)
 	 * - loading: boolean - muestra loader (default: false)
@@ -21,32 +21,10 @@
 		class: className = ''
 	} = $props();
 
-	// Define estilos según la variante
-	const variants = {
-		primary: 'bg-blue-600 hover:bg-blue-700 text-white',
-		secondary: 'bg-gray-200 hover:bg-gray-300 text-gray-800',
-		danger: 'bg-red-600 hover:bg-red-700 text-white'
-	};
+	const buttonClass = $derived(
+		`btn btn-${variant} btn-${size} ${loading ? 'is-loading' : ''} ${className}`
+	);
 
-	// Define tamaños
-	const sizes = {
-		sm: 'px-3 py-1 text-sm',
-		md: 'px-4 py-2 text-base',
-		lg: 'px-6 py-3 text-lg'
-	};
-
-	const buttonClass = $derived(`
-		${variants[variant]}
-		${sizes[size]}
-		rounded-lg
-		font-medium
-		transition-colors
-		duration-200
-		disabled:opacity-50
-		disabled:cursor-not-allowed
-		${loading ? 'opacity-75' : ''}
-		${className}
-	`);
 </script>
 
 <button
@@ -56,7 +34,7 @@
 	onclick={onclick}
 >
 	{#if loading}
-		<span class="inline-block animate-spin mr-2">⏳</span>
+		<span class="btn-spinner">⏳</span>
 	{/if}
 	{@render children?.()}
 </button>
@@ -65,5 +43,94 @@
 	button {
 		font-family: inherit;
 		cursor: pointer;
+	}
+
+	.btn {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		gap: 0.5rem;
+		white-space: nowrap;
+		border-radius: 0.75rem;
+		font-weight: 600;
+		border: 1px solid rgba(255, 255, 255, 0.1);
+		transition: all 0.15s ease;
+	}
+
+	.btn:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+		box-shadow: none;
+	}
+
+	.btn-sm {
+		padding: 0.5rem 1rem;
+		font-size: 0.875rem;
+	}
+
+	.btn-md {
+		padding: 0.75rem 1.5rem;
+		font-size: 1rem;
+	}
+
+	.btn-lg {
+		padding: 1rem 2rem;
+		font-size: 1.125rem;
+	}
+
+	.btn-primary {
+		color: #fff;
+		background: linear-gradient(90deg, #2563eb, #3b82f6);
+		box-shadow: 0 10px 18px rgba(37, 99, 235, 0.35);
+	}
+
+	.btn-primary:hover:not(:disabled) {
+		background: linear-gradient(90deg, #3b82f6, #60a5fa);
+	}
+
+	.btn-secondary {
+		color: #f1f5f9;
+		background: linear-gradient(90deg, #334155, #475569);
+		box-shadow: 0 8px 16px rgba(51, 65, 85, 0.35);
+	}
+
+	.btn-secondary:hover:not(:disabled) {
+		background: linear-gradient(90deg, #475569, #64748b);
+	}
+
+	.btn-danger {
+		color: #fff;
+		background: linear-gradient(90deg, #dc2626, #ef4444);
+		box-shadow: 0 10px 18px rgba(220, 38, 38, 0.35);
+	}
+
+	.btn-danger:hover:not(:disabled) {
+		background: linear-gradient(90deg, #ef4444, #f87171);
+	}
+
+	.btn-success {
+		color: #fff;
+		background: linear-gradient(90deg, #059669, #10b981);
+		box-shadow: 0 10px 18px rgba(5, 150, 105, 0.35);
+	}
+
+	.btn-success:hover:not(:disabled) {
+		background: linear-gradient(90deg, #10b981, #34d399);
+	}
+
+	.is-loading {
+		opacity: 0.75;
+		cursor: wait;
+	}
+
+	.btn-spinner {
+		display: inline-block;
+		animation: spin 1s linear infinite;
+	}
+
+	@keyframes spin {
+		to {
+			transform: rotate(360deg);
+		}
 	}
 </style>

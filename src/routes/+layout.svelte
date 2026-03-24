@@ -6,16 +6,9 @@
 	 * - Si está autenticado: muestra el layout con navegación según el rol
 	 */
 
-	import { authStore } from '$lib/stores/authStore.js';
 	import favicon from '$lib/assets/favicon.svg';
 
 	let { children } = $props();
-	let currentUser;
-
-	// Se suscribe a cambios en el store de autenticación
-	authStore.subscribe((user) => {
-		currentUser = user;
-	});
 </script>
 
 <svelte:head>

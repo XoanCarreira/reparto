@@ -75,56 +75,56 @@
 	<title>Incidencias - Admin - Reparto</title>
 </svelte:head>
 
-<div class="space-y-6 animate-fadeIn">
+<div class="page-root animate-fadeIn full-width-desktop">
 	<!-- Encabezado -->
-	<div>
-		<h1 class="text-3xl font-bold text-gray-900">⚠️ Gestión de Incidencias</h1>
-		<p class="text-gray-600 mt-2">Total: {allIncidents.length} incidencias registradas</p>
+	<div class="page-header">
+		<h1 class="page-title">⚠️ Gestión de Incidencias</h1>
+		<p class="page-subtitle">Total: {allIncidents.length} incidencias registradas</p>
 	</div>
 
 	<!-- Estadísticas rápidas -->
 	<div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-		<Card>
-			<div class="text-center">
-				<div class="text-4xl font-bold text-red-600 mb-2">
+		<Card class="glass-red">
+			<div class="text-center py-6 px-4 radius-lg panel-surface-soft">
+				<div class="fs-4xl fw-bold text-red-300 mb-2">
 					{allIncidents.filter((i) => i.status === 'open').length}
 				</div>
-				<p class="text-gray-600 font-medium">Abiertas (Sin resolver)</p>
+				<p class="txt-subtle fw-medium">Abiertas (Sin resolver)</p>
 			</div>
 		</Card>
 
-		<Card>
-			<div class="text-center">
-				<div class="text-4xl font-bold text-blue-600 mb-2">
+		<Card class="glass-blue">
+			<div class="text-center py-6 px-4 radius-lg panel-surface-soft">
+				<div class="fs-4xl fw-bold text-blue-300 mb-2">
 					{allIncidents.filter((i) => i.status === 'in_progress').length}
 				</div>
-				<p class="text-gray-600 font-medium">En Proceso</p>
+				<p class="txt-subtle fw-medium">En Proceso</p>
 			</div>
 		</Card>
 
-		<Card>
-			<div class="text-center">
-				<div class="text-4xl font-bold text-green-600 mb-2">
+		<Card class="glass-emerald">
+			<div class="text-center py-6 px-4 radius-lg panel-surface-soft">
+				<div class="fs-4xl fw-bold text-emerald-300 mb-2">
 					{allIncidents.filter((i) => i.status === 'resolved').length}
 				</div>
-				<p class="text-gray-600 font-medium">Resueltas</p>
+				<p class="txt-subtle fw-medium">Resueltas</p>
 			</div>
 		</Card>
 	</div>
 
 	<!-- Filtros -->
-	<div class="bg-white rounded-lg border border-gray-200 p-6">
-		<p class="text-sm font-medium text-gray-700 mb-3">Filtrar por estado:</p>
+	<div class="panel-surface radius-lg p-6">
+		<p class="fs-sm fw-medium txt-subtle mb-3">Filtrar por estado:</p>
 		<div class="flex flex-wrap gap-2">
 			{#each ['all', 'open', 'in_progress', 'resolved'] as status (status)}
 				{@const count = status === 'all' ? allIncidents.length : allIncidents.filter((i) => i.status === status).length}
 				{@const icons = { all: '📋', open: '🔴', in_progress: '🔵', resolved: '✅' }}
 				<button
 					onclick={() => changeFilter(status)}
-					class={`px-4 py-2 rounded-lg font-medium transition-colors ${
+					class={`px-4 py-2 radius-lg fw-medium transition-colors ${
 						statusFilter === status
-							? 'bg-blue-100 text-blue-700 border border-blue-300'
-							: 'bg-gray-100 text-gray-700 border border-gray-300 hover:bg-gray-200'
+							? 'bg-indigo-900/40 text-indigo-200 border border-indigo-500/50'
+							: 'bg-panel txt-soft border bd-soft hover:bg-panel-soft'
 					}`}
 				>
 					{icons[status] || status}
@@ -137,52 +137,52 @@
 
 	<!-- Lista de incidencias -->
 	{#if filteredIncidents.length === 0}
-		<Card>
+		<Card class="glass-slate">
 			<div class="text-center py-12">
-				<p class="text-gray-500 text-lg">✓ No hay incidencias con este filtro</p>
+				<p class="txt-muted fs-lg">✓ No hay incidencias con este filtro</p>
 			</div>
 		</Card>
 	{:else}
 		<div class="space-y-4">
 			{#each filteredIncidents as incident (incident.id)}
-				<Card>
-					<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+				<Card class="glass-rose">
+					<div class="grid grid-cols-1 md:grid-cols-2 gap-6 p-4 radius-lg panel-surface-soft">
 						<!-- Información general -->
 						<div>
 							<div class="mb-4">
-								<p class="text-sm text-gray-600">Incidencia #{incident.id}</p>
-								<p class="text-lg font-bold text-gray-900">
+								<p class="fs-sm txt-muted">Incidencia #{incident.id}</p>
+								<p class="fs-lg fw-bold txt-primary">
 									{getIncidentType(incident.type)}
 								</p>
 							</div>
 
 							<div class="mb-4">
-								<p class="text-sm text-gray-600">Cliente</p>
-								<p class="text-gray-900 font-medium">{getClientName(incident.clientId)}</p>
+								<p class="fs-sm txt-muted">Cliente</p>
+								<p class="txt-primary fw-medium">{getClientName(incident.clientId)}</p>
 							</div>
 
 							<div>
-								<p class="text-sm text-gray-600">Descripción</p>
-								<p class="text-gray-800 mt-1">{incident.description}</p>
+								<p class="fs-sm txt-muted">Descripción</p>
+								<p class="txt-subtle mt-1">{incident.description}</p>
 							</div>
 						</div>
 
 						<!-- Estado y acciones -->
 						<div>
-							<div class="bg-gray-50 rounded-lg p-4 mb-4">
-								<p class="text-sm text-gray-600 mb-2">Estado</p>
+							<div class="panel-surface-soft radius-lg p-4 mb-4">
+								<p class="fs-sm txt-muted mb-2">Estado</p>
 								<Badge status={incident.status} />
-								<p class="text-sm text-gray-600 mt-3">Prioridad</p>
+								<p class="fs-sm txt-muted mt-3">Prioridad</p>
 								<div class="flex items-center gap-2 mt-1">
-									<span class="text-xl">{getPriorityIcon(incident.priority)}</span>
+									<span class="fs-xl">{getPriorityIcon(incident.priority)}</span>
 									<Badge status={incident.priority} />
 								</div>
 							</div>
 
-							<div class="text-sm text-gray-600 mb-4">
+							<div class="fs-sm txt-muted mb-4">
 								<p>Reportado: {formatDate(incident.reportedAt)}</p>
 								{#if incident.resolvedAt}
-									<p class="text-green-700 font-medium">Resuelto: {formatDate(incident.resolvedAt)}</p>
+									<p class="text-emerald-300 fw-medium">Resuelto: {formatDate(incident.resolvedAt)}</p>
 								{/if}
 							</div>
 
@@ -196,7 +196,7 @@
 									✓ Marcar como resuelta
 								</Button>
 							{:else}
-								<p class="text-center text-sm text-green-700 font-medium py-2">Incidencia resuelta</p>
+								<p class="text-center fs-sm text-emerald-300 fw-medium py-2">Incidencia resuelta</p>
 							{/if}
 						</div>
 					</div>

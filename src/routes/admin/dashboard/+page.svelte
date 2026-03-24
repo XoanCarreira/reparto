@@ -129,82 +129,86 @@
 	<title>Dashboard - Admin - Reparto</title>
 </svelte:head>
 
-<div class="space-y-8 animate-fadeIn">
+<div class="page-root animate-fadeIn full-width-desktop">
 	<!-- Encabezado -->
-	<div>
-		<h1 class="text-3xl font-bold text-gray-900">📊 Dashboard</h1>
-		<p class="text-gray-600 mt-2">Resumen general del sistema de entregas</p>
+	<div class="page-header">
+		<h1 class="page-title">📊 Dashboard</h1>
+		<p class="page-subtitle">Resumen general del sistema de entregas</p>
 	</div>
 
 	<!-- Grid de estadísticas principales -->
 	<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
 		<!-- Tarjeta: Pedidos Pendientes -->
-		<Card>
-			<div class="text-center">
-				<div class="text-4xl font-bold text-blue-600 mb-2">{pendingOrders.length}</div>
-				<p class="text-gray-600 font-medium">Pedidos Pendientes</p>
-				<p class="text-sm text-gray-500 mt-2">{formatCurrency(getPendingOrdersTotal())}</p>
+		<Card class="glass-blue">
+			<div class="text-center py-6 px-4 radius-lg panel-surface-soft">
+				<div class="fs-4xl fw-bold text-blue-300 mb-2">{pendingOrders.length}</div>
+				<p class="txt-subtle fw-medium">Pedidos Pendientes</p>
+				<p class="fs-sm txt-muted mt-2">{formatCurrency(getPendingOrdersTotal())}</p>
 			</div>
 		</Card>
 
 		<!-- Tarjeta: Productos -->
-		<Card>
-			<div class="text-center">
-				<div class="text-4xl font-bold text-green-600 mb-2">{totalProducts}</div>
-				<p class="text-gray-600 font-medium">Productos Disponibles</p>
-				<p class="text-sm text-gray-500 mt-2">{lowStock.length} bajo stock</p>
+		<Card class="glass-emerald">
+			<div class="text-center py-6 px-4 radius-lg panel-surface-soft">
+				<div class="fs-4xl fw-bold text-emerald-300 mb-2">{totalProducts}</div>
+				<p class="txt-subtle fw-medium">Productos Disponibles</p>
+				<p class="fs-sm txt-muted mt-2">{lowStock.length} bajo stock</p>
 			</div>
 		</Card>
 
 		<!-- Tarjeta: Incidencias -->
-		<Card>
-			<div class="text-center">
-				<div class="text-4xl font-bold text-red-600 mb-2">{openIssues.length}</div>
-				<p class="text-gray-600 font-medium">Incidencias Abiertas</p>
-				<p class="text-sm text-gray-500 mt-2">Requieren atención</p>
+		<Card class="glass-red">
+			<div class="text-center py-6 px-4 radius-lg panel-surface-soft">
+				<div class="fs-4xl fw-bold text-red-300 mb-2">{openIssues.length}</div>
+				<p class="txt-subtle fw-medium">Incidencias Abiertas</p>
+				<p class="fs-sm txt-muted mt-2">Requieren atención</p>
 			</div>
 		</Card>
 
 		<!-- Tarjeta: Clientes -->
-		<Card>
-			<div class="text-center">
-				<div class="text-4xl font-bold text-purple-600 mb-2">{totalClients}</div>
-				<p class="text-gray-600 font-medium">Clientes Registrados</p>
-				<p class="text-sm text-gray-500 mt-2">{totalZones} zonas de reparto</p>
+		<Card class="glass-violet">
+			<div class="text-center py-6 px-4 radius-lg panel-surface-soft">
+				<div class="fs-4xl fw-bold text-violet-300 mb-2">{totalClients}</div>
+				<p class="txt-subtle fw-medium">Clientes Registrados</p>
+				<p class="fs-sm txt-muted mt-2">{totalZones} zonas de reparto</p>
 			</div>
 		</Card>
 	</div>
 
 	<!-- Sección: Pedidos Pendientes Recientes -->
-	<Card title="📦 Pedidos Pendientes (Próximos 5)">
+	<Card
+		title="📦 Pedidos Pendientes (Próximos 5)"
+		titleClass="text-blue-300"
+		class="glass-blue"
+	>
 		{#if pendingOrders.length === 0}
-			<p class="text-gray-500 text-center py-8">No hay pedidos pendientes</p>
+			<p class="txt-muted text-center py-8">No hay pedidos pendientes</p>
 		{:else}
-			<div class="overflow-x-auto">
-				<table class="w-full text-sm">
+			<div class="overflow-x-auto radius-lg panel-surface-soft">
+				<table class="w-full fs-sm">
 					<thead>
-						<tr class="border-b border-gray-200">
-							<th class="text-left py-3 px-4 font-semibold text-gray-700">Pedido</th>
-							<th class="text-left py-3 px-4 font-semibold text-gray-700">Cliente</th>
-							<th class="text-left py-3 px-4 font-semibold text-gray-700">Zona</th>
-							<th class="text-left py-3 px-4 font-semibold text-gray-700">Monto</th>
-							<th class="text-left py-3 px-4 font-semibold text-gray-700">Estado</th>
+						<tr class="border-b bd-mid bg-slate-900/40">
+							<th class="text-left py-3 px-4 fw-semibold txt-subtle">Pedido</th>
+							<th class="text-left py-3 px-4 fw-semibold txt-subtle">Cliente</th>
+							<th class="text-left py-3 px-4 fw-semibold txt-subtle">Zona</th>
+							<th class="text-left py-3 px-4 fw-semibold txt-subtle">Monto</th>
+							<th class="text-left py-3 px-4 fw-semibold txt-subtle">Estado</th>
 						</tr>
 					</thead>
 					<tbody>
 						{#each pendingOrders.slice(0, 5) as order (order.id)}
-							<tr class="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+							<tr class="border-b bd-strong hover:bg-panel/40 transition-colors">
 								<td class="py-3 px-4">
 									<a
 										href={resolve('/admin/orders')}
-										class="text-blue-600 hover:underline font-medium"
+										class="text-blue-600 hover:underline fw-medium"
 									>
 										#{order.id}
 									</a>
 								</td>
 								<td class="py-3 px-4">{getClientName(order.clientId)}</td>
 								<td class="py-3 px-4">{getZoneName(getOrderZone(order))}</td>
-								<td class="py-3 px-4 font-medium">{formatCurrency(order.totalAmount)}</td>
+								<td class="py-3 px-4 fw-medium">{formatCurrency(order.totalAmount)}</td>
 								<td class="py-3 px-4">
 									<Badge status={order.status} />
 								</td>
@@ -217,7 +221,7 @@
 			<div class="mt-4 text-center">
 				<a
 					href={resolve('/admin/orders')}
-					class="inline-block px-4 py-2 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors"
+					class="inline-block px-4 py-2 panel-surface-soft text-blue-300 rounded hover:bg-panel-soft/70 transition-colors"
 				>
 					Ver todos los pedidos →
 				</a>
@@ -225,12 +229,16 @@
 		{/if}
 	</Card>
 
-	<Card title="🗺️ Control de Clientes por Zona (Editable)">
+	<Card
+		title="🗺️ Control de Clientes por Zona (Editable)"
+		titleClass="text-violet-300"
+		class="glass-violet"
+	>
 		<div class="flex flex-wrap gap-3 mb-4">
 			<button
 				type="button"
 				onclick={resetTable}
-				class="px-4 py-2 rounded bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors"
+				class="px-4 py-2 rounded bg-panel-soft txt-primary hover:bg-slate-600 transition-colors"
 			>
 				Recargar datos calculados
 			</button>
@@ -238,45 +246,45 @@
 
 		<div class="space-y-6">
 			{#each groupedRowsByZone as zone (zone.id)}
-				<div class="border border-gray-200 rounded-xl overflow-hidden">
+				<div class="panel-surface-soft radius-xl overflow-hidden">
 					<div
-						class="px-4 py-3 bg-blue-50 border-b border-blue-100 flex items-center justify-between"
+						class="px-4 py-3 border-b border-white/25 flex items-center justify-between"
 					>
 						<div>
-							<p class="font-semibold text-blue-900">{zone.name}</p>
-							<p class="text-sm text-blue-700">{zone.description}</p>
+							<p class="fw-semibold text-violet-200">{zone.name}</p>
+							<p class="fs-sm text-violet-300/80">{zone.description}</p>
 						</div>
 						<button
 							type="button"
 							onclick={() => addRow(zone.id)}
-							class="px-3 py-2 rounded bg-blue-600 text-white text-sm hover:bg-blue-700 transition-colors"
+							class="px-3 py-2 rounded bg-blue-600 text-white fs-sm hover:bg-blue-700 transition-colors"
 						>
 							+ Anadir cliente
 						</button>
 					</div>
 
 					{#if zone.rows.length === 0}
-						<p class="p-4 text-sm text-gray-500">No hay clientes configurados para esta zona.</p>
+						<p class="p-4 fs-sm txt-muted">No hay clientes configurados para esta zona.</p>
 					{:else}
 						<div class="overflow-x-auto">
-							<table class="w-full text-sm">
+							<table class="w-full fs-sm">
 								<thead>
-									<tr class="border-b border-gray-200 bg-gray-50 text-gray-700">
-										<th class="text-left py-3 px-4 font-semibold">Cliente</th>
-										<th class="text-left py-3 px-4 font-semibold">Zona</th>
-										<th class="text-left py-3 px-4 font-semibold">Pendientes</th>
-										<th class="text-left py-3 px-4 font-semibold">En reparto</th>
-										<th class="text-left py-3 px-4 font-semibold">Media mes anterior</th>
-										<th class="text-left py-3 px-4 font-semibold">Media mes actual</th>
-										<th class="text-left py-3 px-4 font-semibold">Acciones</th>
+									<tr class="border-b bd-mid bg-slate-900/40 txt-subtle">
+										<th class="text-left py-3 px-4 fw-semibold">Cliente</th>
+										<th class="text-left py-3 px-4 fw-semibold">Zona</th>
+										<th class="text-left py-3 px-4 fw-semibold">Pendientes</th>
+										<th class="text-left py-3 px-4 fw-semibold">En reparto</th>
+										<th class="text-left py-3 px-4 fw-semibold">Media mes anterior</th>
+										<th class="text-left py-3 px-4 fw-semibold">Media mes actual</th>
+										<th class="text-left py-3 px-4 fw-semibold">Acciones</th>
 									</tr>
 								</thead>
 								<tbody>
 									{#each zone.rows as row (row.id)}
-										<tr class="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+										<tr class="border-b bd-strong hover:bg-panel/30 transition-colors">
 											<td class="py-2 px-4">
 												<select
-													class="w-full border border-gray-300 rounded px-2 py-1"
+													class="w-full border bd-soft bg-panel txt-primary rounded px-2 py-1"
 													value={row.clientId}
 													onchange={(e) =>
 														updateLocalRow(row.id, 'clientId', e.currentTarget.value)}
@@ -288,7 +296,7 @@
 											</td>
 											<td class="py-2 px-4">
 												<select
-													class="w-full border border-gray-300 rounded px-2 py-1"
+													class="w-full border bd-soft bg-panel txt-primary rounded px-2 py-1"
 													value={row.zoneId}
 													onchange={(e) => updateLocalRow(row.id, 'zoneId', e.currentTarget.value)}
 												>
@@ -301,7 +309,7 @@
 												<input
 													type="number"
 													min="0"
-													class="w-24 border border-gray-300 rounded px-2 py-1"
+													class="w-24 border bd-soft bg-panel txt-primary rounded px-2 py-1"
 													value={row.pendingOrders}
 													oninput={(e) =>
 														updateLocalRow(row.id, 'pendingOrders', e.currentTarget.value)}
@@ -311,7 +319,7 @@
 												<input
 													type="number"
 													min="0"
-													class="w-24 border border-gray-300 rounded px-2 py-1"
+													class="w-24 border bd-soft bg-panel txt-primary rounded px-2 py-1"
 													value={row.inDeliveryOrders}
 													oninput={(e) =>
 														updateLocalRow(row.id, 'inDeliveryOrders', e.currentTarget.value)}
@@ -322,7 +330,7 @@
 													type="number"
 													min="0"
 													step="0.01"
-													class="w-32 border border-gray-300 rounded px-2 py-1"
+													class="w-32 border bd-soft bg-panel txt-primary rounded px-2 py-1"
 													value={row.avgPrevMonth}
 													oninput={(e) =>
 														updateLocalRow(row.id, 'avgPrevMonth', e.currentTarget.value)}
@@ -333,7 +341,7 @@
 													type="number"
 													min="0"
 													step="0.01"
-													class="w-32 border border-gray-300 rounded px-2 py-1"
+													class="w-32 border bd-soft bg-panel txt-primary rounded px-2 py-1"
 													value={row.avgCurrentMonth}
 													oninput={(e) =>
 														updateLocalRow(row.id, 'avgCurrentMonth', e.currentTarget.value)}
@@ -351,7 +359,7 @@
 													<button
 														type="button"
 														onclick={() => deleteRow(row.id)}
-														class="px-3 py-1 rounded bg-red-100 text-red-700 hover:bg-red-200 transition-colors"
+														class="px-3 py-1 rounded bg-red-900/30 text-red-300 hover:bg-red-900/50 transition-colors"
 													>
 														Eliminar
 													</button>
@@ -371,24 +379,28 @@
 	<!-- Grid: Stock y Incidencias -->
 	<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
 		<!-- Stock bajo -->
-		<Card title="⚠️ Productos con Stock Bajo">
+		<Card
+			title="⚠️ Productos con Stock Bajo"
+			titleClass="text-amber-300"
+			class="glass-amber"
+		>
 			{#if lowStock.length === 0}
-				<p class="text-gray-500 text-center py-8">✓ Todo en orden</p>
+				<p class="txt-muted text-center py-8">✓ Todo en orden</p>
 			{:else}
-				<div class="space-y-3">
+				<div class="space-y-3 p-4 radius-lg panel-surface-soft">
 					{#each lowStock as product (product.id)}
 						<div
-							class="flex items-center justify-between p-3 bg-yellow-50 rounded-lg border border-yellow-200"
+							class="flex items-center justify-between p-3 panel-surface-soft radius-lg"
 						>
 							<div>
-								<p class="font-medium text-gray-800">{product.name}</p>
-								<p class="text-sm text-gray-600">
+								<p class="fw-medium txt-primary">{product.name}</p>
+								<p class="fs-sm txt-muted">
 									Stock actual: {product.stock}/{product.minStock}
 								</p>
 							</div>
 							<div class="text-right">
-								<div class="text-2xl font-bold text-yellow-600">{product.stock}</div>
-								<p class="text-xs text-gray-600">{product.unit}</p>
+								<div class="fs-2xl fw-bold text-amber-300">{product.stock}</div>
+								<p class="text-xs txt-muted">{product.unit}</p>
 							</div>
 						</div>
 					{/each}
@@ -397,21 +409,25 @@
 		</Card>
 
 		<!-- Incidencias abiertas -->
-		<Card title="🔔 Incidencias Abiertas">
+		<Card
+			title="🔔 Incidencias Abiertas"
+			titleClass="text-red-300"
+			class="glass-red"
+		>
 			{#if openIssues.length === 0}
-				<p class="text-gray-500 text-center py-8">✓ Sin problemas reportados</p>
+				<p class="txt-muted text-center py-8">✓ Sin problemas reportados</p>
 			{:else}
-				<div class="space-y-3">
+				<div class="space-y-3 p-4 radius-lg panel-surface-soft">
 					{#each openIssues as incident (incident.id)}
-						<div class="p-3 bg-red-50 rounded-lg border border-red-200">
+						<div class="p-3 panel-surface-soft radius-lg">
 							<div class="flex justify-between items-start mb-2">
 								<div>
-									<p class="font-medium text-gray-800">{getClientName(incident.clientId)}</p>
-									<p class="text-sm text-gray-600">Pedido #{incident.orderId}</p>
+									<p class="fw-medium txt-primary">{getClientName(incident.clientId)}</p>
+									<p class="fs-sm txt-muted">Pedido #{incident.orderId}</p>
 								</div>
 								<Badge status={incident.priority} />
 							</div>
-							<p class="text-sm text-gray-700">{incident.description}</p>
+							<p class="fs-sm txt-soft">{incident.description}</p>
 						</div>
 					{/each}
 				</div>
