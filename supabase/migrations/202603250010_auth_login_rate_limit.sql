@@ -1,0 +1,76 @@
+-- Add brute-force protection to custom auth RPC.
+
+create table if not exists public.auth_login_attempts (
+  email text primary key,
+  failed_count integer not null default 0,
+  last_failed_at timestamptz,
+  locked_until timestamptz,
+  updated_at timestamptz not null default now()
+);
+
+alter table public.auth_login_attempts enable row level security;
+
+drop policy if exists auth_login_attempts_no_access on public.auth_login_attempts;
+create policy auth_login_attempts_no_access
+on public.auth_login_attempts
+for all
+to anon, authenticated
+using (false)
+with check (false);
+
+create or replace function public.app_auth_login(p_email text, p_password text)
+returns table (
+  id bigint,
+  email text,
+  name text,
+  role public.user_role,
+  zone_id bigint
+)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_email text := lower(trim(p_email));
+  v_attempt public.auth_login_attempts%rowtype;
+begin
+  select *
+  into v_attempt
+  from public.auth_login_attempts a
+  where a.email = v_email;
+
+  -- Locked account cooldown window.
+  if found and v_attempt.locked_until is not null and v_attempt.locked_until > now() then
+    return;
+  end if;
+
+  return query
+  select u.id, u.email, u.name, u.role, u.zone_id
+  from public.users u
+  where lower(trim(u.email)) = v_email
+    and u.password_hash is not null
+    and u.password_hash = extensions.crypt(p_password, u.password_hash)
+  limit 1;
+
+  if found then
+    delete from public.auth_login_attempts where email = v_email;
+    return;
+  end if;
+
+  insert into public.auth_login_attempts (email, failed_count, last_failed_at, locked_until, updated_at)
+  values (v_email, 1, now(), null, now())
+  on conflict (email)
+  do update set
+    failed_count = public.auth_login_attempts.failed_count + 1,
+    last_failed_at = now(),
+    locked_until = case
+      when public.auth_login_attempts.failed_count + 1 >= 5 then now() + interval '15 minutes'
+      else null
+    end,
+    updated_at = now();
+
+  return;
+end;
+$$;
+
+grant execute on function public.app_auth_login(text, text) to anon, authenticated;

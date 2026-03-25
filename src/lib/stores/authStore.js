@@ -1,12 +1,16 @@
 /**
  * STORE DE AUTENTICACIÓN
  * Gestiona la sesión del usuario actual, login, logout y verificación de roles.
- * Integra con el sistema de mock data.
+ * Fuente única: base de datos (Supabase).
  */
 
 import { writable } from 'svelte/store';
-import { users } from '../data/mockData.js';
-import { deliveryStaffStore, clientsStore } from './dataStore.js';
+import {
+	fetchAuthUserDb,
+	fetchProfileByAuthUserIdDb,
+	isDatabaseEnabled
+} from '../utils/supabaseDb.js';
+import { isSupabaseAuthEnabled, supabaseClient } from '../utils/supabaseClient.js';
 
 /**
  * Crea un store reactivo de Svelte para la sesión del usuario actual
@@ -30,54 +34,78 @@ function createAuthStore() {
 		 * @param {string} password - Contraseña del usuario
 		 * @returns {object} - { success: boolean, error?: string, user?: object }
 		 */
-		login: (email, password) => {
+		login: async (email, password) => {
 			const normalizedEmail = String(email || '').trim().toLowerCase();
 			const normalizedPassword = String(password || '');
 
-			// Busca primero en usuarios del sistema (admin/client y repartidores legacy)
-			let user = users.find(
-				(u) =>
-					String(u.email || '').trim().toLowerCase() === normalizedEmail &&
-					String(u.password || '') === normalizedPassword
-			);
-
-			if (!user) {
-				// Si no existe en users, permite autenticación de repartidores del store operativo.
-				const deliveryUser = deliveryStaffStore.getAll().find(
-					(staff) =>
-						String(staff.email || '').trim().toLowerCase() === normalizedEmail &&
-						String(staff.password || '') === normalizedPassword
-				);
-
-				if (deliveryUser) {
-					user = {
-						id: deliveryUser.id,
-						email: deliveryUser.email,
-						name: deliveryUser.name,
-						role: 'delivery',
-						zone: deliveryUser.zoneId,
-						deliveryStaffId: deliveryUser.id
-					};
-				}
+			if (!isDatabaseEnabled) {
+				return { success: false, error: 'La conexión con la base de datos no está configurada' };
 			}
 
-			if (!user) {
-				// Si no existe en repartidores, permite autenticación de clientes creados dinámicamente.
-				const clientUser = clientsStore.getAll().find(
-					(client) =>
-						String(client.email || '').trim().toLowerCase() === normalizedEmail &&
-						String(client.password || '') === normalizedPassword
-				);
+			let user = null;
+			let authData = null;
+			let authError = null;
 
-				if (clientUser) {
-					user = {
-						id: clientUser.id,
-						email: clientUser.email,
-						name: clientUser.name,
-						role: 'client',
-						zone: clientUser.zone
+			if (!isSupabaseAuthEnabled || !supabaseClient) {
+				return { success: false, error: 'Supabase Auth no está configurado' };
+			}
+
+			try {
+				const { data, error } = await supabaseClient.auth.signInWithPassword({
+					email: normalizedEmail,
+					password: normalizedPassword
+				});
+				authData = data;
+				authError = error;
+
+				if (error && isDatabaseEnabled) {
+					// Bridge: si el usuario existe en public.users pero no en auth.users,
+					// lo provisionamos en Auth en el primer login con sus credenciales válidas.
+					let legacyUser = null;
+					try {
+						legacyUser = await fetchAuthUserDb(normalizedEmail, normalizedPassword);
+					} catch (legacyError) {
+						console.error('No se pudo validar usuario legado en bridge auth:', legacyError);
+					}
+					if (legacyUser) {
+						const { error: signUpError } = await supabaseClient.auth.signUp({
+							email: normalizedEmail,
+							password: normalizedPassword
+						});
+
+						// Si ya está registrado, continuamos con login normal.
+						if (signUpError && signUpError.message !== 'User already registered') {
+							console.error('No se pudo crear cuenta en Supabase Auth:', signUpError);
+						}
+
+						const retried = await supabaseClient.auth.signInWithPassword({
+							email: normalizedEmail,
+							password: normalizedPassword
+						});
+						authData = retried.data;
+						authError = retried.error;
+					}
+				}
+
+				if (authError) {
+					return { success: false, error: 'Email o contraseña incorrectos' };
+				}
+
+				if (!authData?.user?.id) {
+					return { success: false, error: 'No se pudo recuperar la sesión de usuario' };
+				}
+
+				user = await fetchProfileByAuthUserIdDb(authData.user.id);
+				if (!user) {
+					await supabaseClient.auth.signOut();
+					return {
+						success: false,
+						error: 'Usuario autenticado sin perfil de aplicación vinculado'
 					};
 				}
+			} catch (error) {
+				console.error('Error autenticando con Supabase Auth:', error);
+				return { success: false, error: 'No se pudo conectar con el servicio de autenticación' };
 			}
 
 			if (!user) {
@@ -107,7 +135,15 @@ function createAuthStore() {
 		/**
 		 * Cierra la sesión del usuario actual
 		 */
-		logout: () => {
+		logout: async () => {
+			if (isSupabaseAuthEnabled && supabaseClient) {
+				try {
+					await supabaseClient.auth.signOut();
+				} catch (error) {
+					console.error('No se pudo cerrar sesión en Supabase Auth:', error);
+				}
+			}
+
 			set(null);
 			if (typeof window !== 'undefined') {
 				localStorage.removeItem('currentUser');

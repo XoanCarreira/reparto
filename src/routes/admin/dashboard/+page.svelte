@@ -20,7 +20,6 @@
 	} from '$lib/stores/dataStore.js';
 	import { resolve } from '$app/paths';
 	import { formatCurrency } from '$lib/utils/helpers.js';
-	import { users, zones } from '$lib/data/mockData.js';
 
 	let pendingOrders = $state([]);
 	let allOrders = $state([]);
@@ -92,7 +91,7 @@
 	 * Obtiene el nombre del cliente por su ID
 	 */
 	function getClientName(clientId) {
-		const client = allClients.find((c) => c.id === clientId) || users.find((u) => u.id === clientId);
+		const client = allClients.find((c) => c.id === clientId);
 		return client?.name || 'Cliente desconocido';
 	}
 
@@ -100,13 +99,13 @@
 	 * Obtiene el nombre de la zona por su ID
 	 */
 	function getZoneName(zoneId) {
-		const zone = allZones.find((z) => z.id === zoneId) || zones.find((z) => z.id === zoneId);
+		const zone = allZones.find((z) => z.id === zoneId);
 		return zone?.name || 'Zona desconocida';
 	}
 
 	function getClientZone(clientId) {
-		const client = allClients.find((c) => c.id === clientId) || users.find((u) => u.id === clientId);
-		return client?.zone || allZones[0]?.id || zones[0]?.id || 1;
+		const client = allClients.find((c) => c.id === clientId);
+		return client?.zone || allZones[0]?.id || 1;
 	}
 
 	function getOrderZone(order) {
