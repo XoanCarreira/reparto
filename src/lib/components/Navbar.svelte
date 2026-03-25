@@ -34,6 +34,20 @@
 		mobileMenuOpen = false;
 		await goto(resolve(path));
 	}
+
+	function getHomePathByRole(role) {
+		if (role === 'admin') return '/admin/dashboard';
+		if (role === 'client') return '/client/orders';
+		if (role === 'delivery') return '/delivery';
+		return '/';
+	}
+
+	function getRoleLabel(role) {
+		if (role === 'admin') return 'Administrador';
+		if (role === 'client') return 'Cliente';
+		if (role === 'delivery') return 'Repartidor';
+		return 'Usuario';
+	}
 </script>
 
 <nav class="navbar">
@@ -42,7 +56,7 @@
 			<!-- Logo y título -->
 			<div class="navbar-brand-wrap">
 				<button
-					onclick={() => navigateTo(currentUser?.role === 'admin' ? '/admin/dashboard' : '/client/orders')}
+					onclick={() => navigateTo(getHomePathByRole(currentUser?.role))}
 					class="navbar-brand"
 				>
 					<span class="navbar-logo">📦</span>
@@ -84,6 +98,12 @@
 					>
 						👥 Clientes
 					</button>
+					<button
+						onclick={() => navigateTo('/admin/routes')}
+						class="nav-link"
+					>
+						🗺️ Rutas
+					</button>
 				{:else if currentUser?.role === 'client'}
 					<!-- Menú Cliente -->
 					<button
@@ -104,6 +124,13 @@
 					>
 						👤 Mi Perfil
 					</button>
+				{:else if currentUser?.role === 'delivery'}
+					<button
+						onclick={() => navigateTo('/delivery')}
+						class="nav-link"
+					>
+						🗺️ Mi Ruta
+					</button>
 				{/if}
 			</div>
 
@@ -111,7 +138,7 @@
 			<div class="navbar-desktop-user">
 				<div class="navbar-user-info">
 					<p class="navbar-user-name">{currentUser?.name || 'Usuario'}</p>
-					<p class="navbar-user-role">{currentUser?.role === 'admin' ? 'Administrador' : 'Cliente'}</p>
+					<p class="navbar-user-role">{getRoleLabel(currentUser?.role)}</p>
 				</div>
 
 				<button
@@ -171,6 +198,12 @@
 						>
 							👥 Clientes
 						</button>
+						<button
+							onclick={() => navigateTo('/admin/routes')}
+							class="navbar-mobile-link"
+						>
+							🗺️ Rutas
+						</button>
 					{:else if currentUser?.role === 'client'}
 						<button
 							onclick={() => navigateTo('/client/orders')}
@@ -189,6 +222,13 @@
 							class="navbar-mobile-link"
 						>
 							👤 Mi Perfil
+						</button>
+					{:else if currentUser?.role === 'delivery'}
+						<button
+							onclick={() => navigateTo('/delivery')}
+							class="navbar-mobile-link"
+						>
+							🗺️ Mi Ruta
 						</button>
 					{/if}
 
@@ -250,7 +290,7 @@
 
 	.navbar-brand-text {
 		font-weight: 700;
-		color: #f1f5f9;
+		color: #f9f1f2;
 		display: none;
 	}
 
@@ -432,5 +472,9 @@
 
 	.animate-fadeIn {
 		animation: fadeIn 0.3s ease-in-out;
+	}
+
+	button{
+		background-color: #334155;
 	}
 </style>

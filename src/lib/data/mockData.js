@@ -48,6 +48,16 @@ export const users = [
 		phone: '+34 914 567 890',
 		address: 'Plaza Mayor 789, 28003 Madrid',
 		createdAt: new Date('2024-03-01')
+	},
+	{
+		id: 301,
+		email: 'repartidor1@empresa.com',
+		password: 'repartidor123',
+		name: 'Repartidor 1',
+		role: 'delivery',
+		zone: 1,
+		phone: '+34 600 111 222',
+		createdAt: new Date('2024-03-10')
 	}
 ];
 
@@ -222,6 +232,30 @@ export const deliveryStaff = [
 		zoneId: 1,
 		phone: '+34 600 333 444',
 		vehicle: 'Furgoneta Roja',
+		status: 'active'
+	},
+	{
+		id: 204,
+		name: 'Ana Rodríguez',
+		zoneId: null, // Libre - sin zona asignada
+		phone: '+34 600 444 555',
+		vehicle: 'Furgoneta Amarilla',
+		status: 'active'
+	},
+	{
+		id: 205,
+		name: 'David Fernández',
+		zoneId: null, // Libre - sin zona asignada
+		phone: '+34 600 555 666',
+		vehicle: 'Moto Roja',
+		status: 'active'
+	},
+	{
+		id: 206,
+		name: 'Elena Gutiérrez',
+		zoneId: null, // Libre - sin zona asignada
+		phone: '+34 600 666 777',
+		vehicle: 'Bicicleta Eléctrica',
 		status: 'active'
 	}
 ];

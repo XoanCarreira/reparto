@@ -13,7 +13,9 @@
 		lowStockProducts,
 		openIncidents,
 		productsStore,
-		zoneClientMetricsStore
+		zoneClientMetricsStore,
+		zonesStore,
+		deliveryStaffStore
 	} from '$lib/stores/dataStore.js';
 	import { resolve } from '$app/paths';
 	import { formatCurrency } from '$lib/utils/helpers.js';
@@ -22,11 +24,12 @@
 	let pendingOrders = $state([]);
 	let lowStock = $state([]);
 	let openIssues = $state([]);
-	let editableRows = $state([]);
+	let zoneClientRows = $state([]);
+	let allZones = $state([]);
+	let allStaff = $state([]);
 	let totalProducts = $state(0);
 	const totalClients = users.filter((u) => u.role === 'client').length;
 	const totalZones = zones.length;
-	const clientOptions = users.filter((u) => u.role === 'client');
 
 	// Se suscribe a los stores para obtener datos en tiempo real
 	ordersStore.subscribe(($orders) => {
@@ -46,7 +49,15 @@
 	});
 
 	zoneClientMetricsStore.subscribe(($rows) => {
-		editableRows = $rows.map((row) => ({ ...row }));
+		zoneClientRows = $rows;
+	});
+
+	zonesStore.subscribe(($zones) => {
+		allZones = $zones;
+	});
+
+	deliveryStaffStore.subscribe(($staff) => {
+		allStaff = $staff;
 	});
 
 	/**
@@ -81,46 +92,23 @@
 		return order.zoneId || getClientZone(order.clientId);
 	}
 
-	function updateLocalRow(rowId, key, value) {
-		editableRows = editableRows.map((row) => {
-			if (row.id !== rowId) {
-				return row;
-			}
-
-			const parsedValue =
-				key === 'clientId' || key === 'zoneId'
-					? Number(value)
-					: key === 'pendingOrders' || key === 'inDeliveryOrders'
-						? Number.parseInt(value || 0, 10)
-						: Number.parseFloat(value || 0);
-
-			return {
-				...row,
-				[key]: Number.isNaN(parsedValue) ? 0 : parsedValue
-			};
-		});
+	function formatAverage(value) {
+		return Number(value || 0).toFixed(2);
 	}
 
-	function saveRow(row) {
-		zoneClientMetricsStore.updateRow(row.id, row);
-	}
-
-	function addRow(zoneId) {
-		zoneClientMetricsStore.addRow({ zoneId });
-	}
-
-	function deleteRow(rowId) {
-		zoneClientMetricsStore.deleteRow(rowId);
-	}
-
-	function resetTable() {
-		zoneClientMetricsStore.resetFromOrders();
+	/**
+	 * Calcula el número de rutas sin asignar (sin repartidor)
+	 */
+	function getUncoveredRoutesCount() {
+		return allZones.filter(
+			(zone) => !allStaff.some((staff) => Number(staff.zoneId) === Number(zone.id))
+		).length;
 	}
 
 	const groupedRowsByZone = $derived(
 		zones.map((zone) => ({
 			...zone,
-			rows: editableRows.filter((row) => Number(row.zoneId) === zone.id)
+			rows: zoneClientRows.filter((row) => Number(row.zoneId) === zone.id)
 		}))
 	);
 </script>
@@ -137,40 +125,51 @@
 	</div>
 
 	<!-- Grid de estadísticas principales -->
-	<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+	<div class="stats-grid">
 		<!-- Tarjeta: Pedidos Pendientes -->
-		<Card class="glass-blue">
-			<div class="text-center py-6 px-4 radius-lg panel-surface-soft">
-				<div class="fs-4xl fw-bold text-blue-300 mb-2">{pendingOrders.length}</div>
-				<p class="txt-subtle fw-medium">Pedidos Pendientes</p>
-				<p class="fs-sm txt-muted mt-2">{formatCurrency(getPendingOrdersTotal())}</p>
+		<Card class="stat-card">
+			<div class="stat-content blue">
+				<div class="stat-number">{pendingOrders.length}</div>
+				<p class="stat-title">Pedidos Pendientes</p>
+				<p class="stat-subtitle">{formatCurrency(getPendingOrdersTotal())}</p>
 			</div>
 		</Card>
 
 		<!-- Tarjeta: Productos -->
-		<Card class="glass-emerald">
-			<div class="text-center py-6 px-4 radius-lg panel-surface-soft">
-				<div class="fs-4xl fw-bold text-emerald-300 mb-2">{totalProducts}</div>
-				<p class="txt-subtle fw-medium">Productos Disponibles</p>
-				<p class="fs-sm txt-muted mt-2">{lowStock.length} bajo stock</p>
+		<Card class="stat-card">
+			<div class="stat-content emerald">
+				<div class="stat-number">{totalProducts}</div>
+				<p class="stat-title">Productos Disponibles</p>
+				<p class="stat-subtitle">{lowStock.length} bajo stock</p>
 			</div>
 		</Card>
 
 		<!-- Tarjeta: Incidencias -->
-		<Card class="glass-red">
-			<div class="text-center py-6 px-4 radius-lg panel-surface-soft">
-				<div class="fs-4xl fw-bold text-red-300 mb-2">{openIssues.length}</div>
-				<p class="txt-subtle fw-medium">Incidencias Abiertas</p>
-				<p class="fs-sm txt-muted mt-2">Requieren atención</p>
+		<Card class="stat-card">
+			<div class="stat-content red">
+				<div class="stat-number">{openIssues.length}</div>
+				<p class="stat-title">Incidencias Abiertas</p>
+				<p class="stat-subtitle">Requieren atención</p>
 			</div>
 		</Card>
 
 		<!-- Tarjeta: Clientes -->
-		<Card class="glass-violet">
-			<div class="text-center py-6 px-4 radius-lg panel-surface-soft">
-				<div class="fs-4xl fw-bold text-violet-300 mb-2">{totalClients}</div>
-				<p class="txt-subtle fw-medium">Clientes Registrados</p>
-				<p class="fs-sm txt-muted mt-2">{totalZones} zonas de reparto</p>
+		<Card class="stat-card">
+			<div class="stat-content violet">
+				<div class="stat-number">{totalClients}</div>
+				<p class="stat-title">Clientes Registrados</p>
+				<p class="stat-subtitle">{totalZones} zonas de reparto</p>
+			</div>
+		</Card>
+
+		<!-- Tarjeta: Rutas sin Asignar -->
+		<Card class="stat-card">
+			<div class="stat-content orange">
+				<div class="stat-number">{getUncoveredRoutesCount()}</div>
+				<p class="stat-title">Rutas sin Asignar</p>
+				<p class="stat-subtitle">
+					<a href={resolve('/admin/routes')} class="stat-link">Gestionar →</a>
+				</p>
 			</div>
 		</Card>
 	</div>
@@ -178,38 +177,38 @@
 	<!-- Sección: Pedidos Pendientes Recientes -->
 	<Card
 		title="📦 Pedidos Pendientes (Próximos 5)"
-		titleClass="text-blue-300"
-		class="glass-blue"
+		titleClass="title-blue"
+		class="card-section"
 	>
 		{#if pendingOrders.length === 0}
-			<p class="txt-muted text-center py-8">No hay pedidos pendientes</p>
+			<p class="empty-state">No hay pedidos pendientes</p>
 		{:else}
-			<div class="overflow-x-auto radius-lg panel-surface-soft">
-				<table class="w-full fs-sm">
+			<div class="table-wrapper">
+				<table class="table">
 					<thead>
-						<tr class="border-b bd-mid bg-slate-900/40">
-							<th class="text-left py-3 px-4 fw-semibold txt-subtle">Pedido</th>
-							<th class="text-left py-3 px-4 fw-semibold txt-subtle">Cliente</th>
-							<th class="text-left py-3 px-4 fw-semibold txt-subtle">Zona</th>
-							<th class="text-left py-3 px-4 fw-semibold txt-subtle">Monto</th>
-							<th class="text-left py-3 px-4 fw-semibold txt-subtle">Estado</th>
+						<tr>
+							<th>Pedido</th>
+							<th>Cliente</th>
+							<th>Zona</th>
+							<th>Monto</th>
+							<th>Estado</th>
 						</tr>
 					</thead>
 					<tbody>
 						{#each pendingOrders.slice(0, 5) as order (order.id)}
-							<tr class="border-b bd-strong hover:bg-panel/40 transition-colors">
-								<td class="py-3 px-4">
+							<tr>
+								<td>
 									<a
 										href={resolve('/admin/orders')}
-										class="text-blue-600 hover:underline fw-medium"
+										class="table-link"
 									>
 										#{order.id}
 									</a>
 								</td>
-								<td class="py-3 px-4">{getClientName(order.clientId)}</td>
-								<td class="py-3 px-4">{getZoneName(getOrderZone(order))}</td>
-								<td class="py-3 px-4 fw-medium">{formatCurrency(order.totalAmount)}</td>
-								<td class="py-3 px-4">
+								<td>{getClientName(order.clientId)}</td>
+								<td>{getZoneName(getOrderZone(order))}</td>
+								<td class="amount">{formatCurrency(order.totalAmount)}</td>
+								<td>
 									<Badge status={order.status} />
 								</td>
 							</tr>
@@ -218,10 +217,10 @@
 				</table>
 			</div>
 
-			<div class="mt-4 text-center">
+			<div class="view-all">
 				<a
 					href={resolve('/admin/orders')}
-					class="inline-block px-4 py-2 panel-surface-soft text-blue-300 rounded hover:bg-panel-soft/70 transition-colors"
+					class="view-all-link"
 				>
 					Ver todos los pedidos →
 				</a>
@@ -230,141 +229,54 @@
 	</Card>
 
 	<Card
-		title="🗺️ Control de Clientes por Zona (Editable)"
-		titleClass="text-violet-300"
-		class="glass-violet"
+		title="🗺️ Control de Clientes por Zona (Solo Consulta)"
+		titleClass="title-violet"
+		class="card-section"
 	>
-		<div class="flex flex-wrap gap-3 mb-4">
-			<button
-				type="button"
-				onclick={resetTable}
-				class="px-4 py-2 rounded bg-panel-soft txt-primary hover:bg-slate-600 transition-colors"
-			>
-				Recargar datos calculados
-			</button>
+		<div class="readonly-note">
+			Este panel es de consulta en tiempo real. Para modificar datos accede a los paneles de gestión.
 		</div>
 
-		<div class="space-y-6">
+		<div class="readonly-links">
+			<a href={resolve('/admin/clients')} class="link-btn">Gestionar clientes y zonas</a>
+			<a href={resolve('/admin/stock')} class="link-btn">Gestionar stock</a>
+			<a href={resolve('/admin/orders')} class="link-btn">Gestionar pedidos</a>
+		</div>
+
+		<div class="zone-blocks">
 			{#each groupedRowsByZone as zone (zone.id)}
-				<div class="panel-surface-soft radius-xl overflow-hidden">
-					<div
-						class="px-4 py-3 border-b border-white/25 flex items-center justify-between"
-					>
+				<div class="zone-block">
+					<div class="zone-header">
 						<div>
-							<p class="fw-semibold text-violet-200">{zone.name}</p>
-							<p class="fs-sm text-violet-300/80">{zone.description}</p>
+							<p class="zone-name">{zone.name}</p>
+							<p class="zone-desc">{zone.description}</p>
 						</div>
-						<button
-							type="button"
-							onclick={() => addRow(zone.id)}
-							class="px-3 py-2 rounded bg-blue-600 text-white fs-sm hover:bg-blue-700 transition-colors"
-						>
-							+ Anadir cliente
-						</button>
 					</div>
 
 					{#if zone.rows.length === 0}
-						<p class="p-4 fs-sm txt-muted">No hay clientes configurados para esta zona.</p>
+						<p class="zone-empty">No hay clientes configurados para esta zona.</p>
 					{:else}
-						<div class="overflow-x-auto">
-							<table class="w-full fs-sm">
+						<div class="table-wrapper">
+							<table class="table">
 								<thead>
-									<tr class="border-b bd-mid bg-slate-900/40 txt-subtle">
-										<th class="text-left py-3 px-4 fw-semibold">Cliente</th>
-										<th class="text-left py-3 px-4 fw-semibold">Zona</th>
-										<th class="text-left py-3 px-4 fw-semibold">Pendientes</th>
-										<th class="text-left py-3 px-4 fw-semibold">En reparto</th>
-										<th class="text-left py-3 px-4 fw-semibold">Media mes anterior</th>
-										<th class="text-left py-3 px-4 fw-semibold">Media mes actual</th>
-										<th class="text-left py-3 px-4 fw-semibold">Acciones</th>
+									<tr>
+										<th>Cliente</th>
+										<th>Zona</th>
+										<th>Pendientes</th>
+										<th>En reparto</th>
+										<th>Media mes anterior</th>
+										<th>Media mes actual</th>
 									</tr>
 								</thead>
 								<tbody>
 									{#each zone.rows as row (row.id)}
-										<tr class="border-b bd-strong hover:bg-panel/30 transition-colors">
-											<td class="py-2 px-4">
-												<select
-													class="w-full border bd-soft bg-panel txt-primary rounded px-2 py-1"
-													value={row.clientId}
-													onchange={(e) =>
-														updateLocalRow(row.id, 'clientId', e.currentTarget.value)}
-												>
-													{#each clientOptions as client (client.id)}
-														<option value={client.id}>{client.name}</option>
-													{/each}
-												</select>
-											</td>
-											<td class="py-2 px-4">
-												<select
-													class="w-full border bd-soft bg-panel txt-primary rounded px-2 py-1"
-													value={row.zoneId}
-													onchange={(e) => updateLocalRow(row.id, 'zoneId', e.currentTarget.value)}
-												>
-													{#each zones as zoneOption (zoneOption.id)}
-														<option value={zoneOption.id}>{zoneOption.name}</option>
-													{/each}
-												</select>
-											</td>
-											<td class="py-2 px-4">
-												<input
-													type="number"
-													min="0"
-													class="w-24 border bd-soft bg-panel txt-primary rounded px-2 py-1"
-													value={row.pendingOrders}
-													oninput={(e) =>
-														updateLocalRow(row.id, 'pendingOrders', e.currentTarget.value)}
-												/>
-											</td>
-											<td class="py-2 px-4">
-												<input
-													type="number"
-													min="0"
-													class="w-24 border bd-soft bg-panel txt-primary rounded px-2 py-1"
-													value={row.inDeliveryOrders}
-													oninput={(e) =>
-														updateLocalRow(row.id, 'inDeliveryOrders', e.currentTarget.value)}
-												/>
-											</td>
-											<td class="py-2 px-4">
-												<input
-													type="number"
-													min="0"
-													step="0.01"
-													class="w-32 border bd-soft bg-panel txt-primary rounded px-2 py-1"
-													value={row.avgPrevMonth}
-													oninput={(e) =>
-														updateLocalRow(row.id, 'avgPrevMonth', e.currentTarget.value)}
-												/>
-											</td>
-											<td class="py-2 px-4">
-												<input
-													type="number"
-													min="0"
-													step="0.01"
-													class="w-32 border bd-soft bg-panel txt-primary rounded px-2 py-1"
-													value={row.avgCurrentMonth}
-													oninput={(e) =>
-														updateLocalRow(row.id, 'avgCurrentMonth', e.currentTarget.value)}
-												/>
-											</td>
-											<td class="py-2 px-4">
-												<div class="flex gap-2">
-													<button
-														type="button"
-														onclick={() => saveRow(row)}
-														class="px-3 py-1 rounded bg-green-600 text-white hover:bg-green-700 transition-colors"
-													>
-														Guardar
-													</button>
-													<button
-														type="button"
-														onclick={() => deleteRow(row.id)}
-														class="px-3 py-1 rounded bg-red-900/30 text-red-300 hover:bg-red-900/50 transition-colors"
-													>
-														Eliminar
-													</button>
-												</div>
-											</td>
+										<tr>
+											<td>{getClientName(row.clientId)}</td>
+											<td>{getZoneName(row.zoneId)}</td>
+											<td>{row.pendingOrders}</td>
+											<td>{row.inDeliveryOrders}</td>
+											<td>{formatAverage(row.avgPrevMonth)}</td>
+											<td>{formatAverage(row.avgCurrentMonth)}</td>
 										</tr>
 									{/each}
 								</tbody>
@@ -377,30 +289,28 @@
 	</Card>
 
 	<!-- Grid: Stock y Incidencias -->
-	<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+	<div class="cards-grid">
 		<!-- Stock bajo -->
 		<Card
 			title="⚠️ Productos con Stock Bajo"
-			titleClass="text-amber-300"
-			class="glass-amber"
+			titleClass="title-amber"
+			class="card-section"
 		>
 			{#if lowStock.length === 0}
-				<p class="txt-muted text-center py-8">✓ Todo en orden</p>
+				<p class="empty-state">✓ Todo en orden</p>
 			{:else}
-				<div class="space-y-3 p-4 radius-lg panel-surface-soft">
+				<div class="stock-items">
 					{#each lowStock as product (product.id)}
-						<div
-							class="flex items-center justify-between p-3 panel-surface-soft radius-lg"
-						>
+						<div class="stock-item">
 							<div>
-								<p class="fw-medium txt-primary">{product.name}</p>
-								<p class="fs-sm txt-muted">
+								<p class="item-name">{product.name}</p>
+								<p class="item-info">
 									Stock actual: {product.stock}/{product.minStock}
 								</p>
 							</div>
-							<div class="text-right">
-								<div class="fs-2xl fw-bold text-amber-300">{product.stock}</div>
-								<p class="text-xs txt-muted">{product.unit}</p>
+							<div class="item-value">
+								<div class="item-number amber">{product.stock}</div>
+								<p class="item-unit">{product.unit}</p>
 							</div>
 						</div>
 					{/each}
@@ -411,23 +321,23 @@
 		<!-- Incidencias abiertas -->
 		<Card
 			title="🔔 Incidencias Abiertas"
-			titleClass="text-red-300"
-			class="glass-red"
+			titleClass="title-red"
+			class="card-section"
 		>
 			{#if openIssues.length === 0}
-				<p class="txt-muted text-center py-8">✓ Sin problemas reportados</p>
+				<p class="empty-state">✓ Sin problemas reportados</p>
 			{:else}
-				<div class="space-y-3 p-4 radius-lg panel-surface-soft">
+				<div class="incidents-list">
 					{#each openIssues as incident (incident.id)}
-						<div class="p-3 panel-surface-soft radius-lg">
-							<div class="flex justify-between items-start mb-2">
+						<div class="incident-item">
+							<div class="incident-header">
 								<div>
-									<p class="fw-medium txt-primary">{getClientName(incident.clientId)}</p>
-									<p class="fs-sm txt-muted">Pedido #{incident.orderId}</p>
+									<p class="incident-name">{getClientName(incident.clientId)}</p>
+									<p class="incident-order">Pedido #{incident.orderId}</p>
 								</div>
 								<Badge status={incident.priority} />
 							</div>
-							<p class="fs-sm txt-soft">{incident.description}</p>
+							<p class="incident-desc">{incident.description}</p>
 						</div>
 					{/each}
 				</div>
@@ -437,18 +347,479 @@
 </div>
 
 <style>
-	@keyframes fadeIn {
-		from {
-			opacity: 0;
-			transform: translateY(10px);
+	/* ============================================
+	 * ESTRUCTURA GENERAL
+	 * ============================================ */
+	.page-root {
+		padding: 2rem;
+		max-width: 1400px;
+		margin: 0 auto;
+	}
+
+	.page-header {
+		margin-bottom: 2rem;
+	}
+
+	.page-title {
+		font-size: 2rem;
+		font-weight: 700;
+		color: #f1f5f9;
+		margin: 0 0 0.5rem 0;
+		letter-spacing: -0.3px;
+	}
+
+	.page-subtitle {
+		font-size: 1rem;
+		color: #cbd5e1;
+		margin: 0;
+		font-weight: 400;
+	}
+
+	/* ============================================
+	 * GRID DE ESTADÍSTICAS
+	 * ============================================ */
+	.stats-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+		gap: 1.5rem;
+		margin-bottom: 2rem;
+	}
+
+	:global(.stat-card) {
+		height: 100%;
+	}
+
+	.stat-content {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		padding: 2rem 1.5rem;
+		border-radius: 0.5rem;
+		background: #1e293b;
+		border: 1px solid #334155;
+		transition: all 0.2s ease;
+	}
+
+	.stat-content:hover {
+		border-color: #475569;
+		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+	}
+
+	.stat-number {
+		font-size: 3rem;
+		font-weight: 700;
+		margin-bottom: 0.5rem;
+	}
+
+	.stat-title {
+		font-size: 0.95rem;
+		color: #cbd5e1;
+		margin: 0 0 0.5rem 0;
+		font-weight: 500;
+	}
+
+	.stat-subtitle {
+		font-size: 0.85rem;
+		color: #94a3b8;
+		margin: 0;
+	}
+
+	/* Colores por tarjeta */
+	.stat-content.blue .stat-number {
+		color: #3b82f6;
+	}
+
+	.stat-content.emerald .stat-number {
+		color: #10b981;
+	}
+
+	.stat-content.red .stat-number {
+		color: #ef4444;
+	}
+
+	.stat-content.violet .stat-number {
+		color: #8b5cf6;
+	}
+
+	.stat-content.orange .stat-number {
+		color: #f97316;
+	}
+
+	.stat-link {
+		color: #f97316;
+		text-decoration: none;
+		font-weight: 500;
+		transition: opacity 0.2s ease;
+	}
+
+	.stat-link:hover {
+		opacity: 0.8;
+		text-decoration: underline;
+	}
+
+	/* ============================================
+	 * CARDS SECTION
+	 * ============================================ */
+	/* ============================================
+	 * CARDS SECTION
+	 * ============================================ */
+	:global(.card-section) {
+		margin-bottom: 2rem;
+		overflow: visible;
+	}
+
+	:global(.title-blue) {
+		color: #3b82f6;
+	}
+
+	:global(.title-violet) {
+		color: #8b5cf6;
+	}
+
+	:global(.title-amber) {
+		color: #f59e0b;
+	}
+
+	:global(.title-red) {
+		color: #ef4444;
+	}
+
+	/* ============================================
+	 * TABLA GENERAL
+	 * ============================================ */
+	.table-wrapper {
+		overflow-x: auto;
+		border-radius: 0.5rem;
+		background: #0f172a;
+		margin-bottom: 1rem;
+	}
+
+	.table {
+		width: 100%;
+		border-collapse: collapse;
+		font-size: 0.9rem;
+	}
+
+	.table thead tr {
+		border-bottom: 1px solid #334155;
+		background: #1e293b;
+	}
+
+	.table th {
+		text-align: left;
+		padding: 0.75rem 1rem;
+		color: #cbd5e1;
+		font-weight: 600;
+	}
+
+	.table tbody tr {
+		border-bottom: 1px solid #334155;
+		transition: background-color 0.15s ease;
+	}
+
+	.table tbody tr:hover {
+		background: #1e293b;
+	}
+
+	.table td {
+		padding: 0.75rem 1rem;
+		color: #cbd5e1;
+	}
+
+	.table-link {
+		color: #3b82f6;
+		text-decoration: none;
+		font-weight: 500;
+		transition: opacity 0.2s ease;
+	}
+
+	.table-link:hover {
+		opacity: 0.8;
+		text-decoration: underline;
+	}
+
+	.amount {
+		font-weight: 600;
+	}
+
+	.empty-state {
+		text-align: center;
+		color: #94a3b8;
+		padding: 2rem;
+		font-size: 0.95rem;
+	}
+
+	.view-all {
+		text-align: center;
+		padding-top: 1rem;
+	}
+
+	.view-all-link {
+		display: inline-block;
+		padding: 0.75rem 1.5rem;
+		background: #1e293b;
+		color: #3b82f6;
+		border: 1px solid #334155;
+		border-radius: 0.35rem;
+		text-decoration: none;
+		font-weight: 500;
+		transition: all 0.2s ease;
+	}
+
+	.view-all-link:hover {
+		background: #253449;
+		border-color: #475569;
+	}
+
+	/* ============================================
+	 * NOTAS Y LINKS
+	 * ============================================ */
+	.readonly-note {
+		margin-bottom: 1rem;
+		padding: 0.75rem 1rem;
+		border: 1px solid rgba(255, 255, 255, 0.2);
+		border-radius: 0.5rem;
+		background: rgba(30, 41, 59, 0.45);
+		color: #cbd5e1;
+		font-size: 0.9rem;
+	}
+
+	.readonly-links {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.75rem;
+		margin-bottom: 1.5rem;
+	}
+
+	.link-btn {
+		display: inline-block;
+		padding: 0.5rem 0.85rem;
+		border-radius: 0.35rem;
+		border: 1px solid rgba(96, 165, 250, 0.5);
+		background: rgba(30, 64, 175, 0.2);
+		color: #93c5fd;
+		text-decoration: none;
+		font-size: 0.9rem;
+		transition: all 0.2s ease;
+	}
+
+	.link-btn:hover {
+		background: rgba(30, 64, 175, 0.35);
+		border-color: rgba(96, 165, 250, 0.8);
+	}
+
+	/* ============================================
+	 * BLOQUES DE ZONA
+	 * ============================================ */
+	.zone-blocks {
+		display: flex;
+		flex-direction: column;
+		gap: 1.5rem;
+	}
+
+	.zone-block {
+		background: #1e293b;
+		border: 1px solid #334155;
+		border-radius: 0.5rem;
+		overflow: hidden;
+	}
+
+	.zone-header {
+		padding: 1rem;
+		border-bottom: 1px solid #334155;
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+	}
+
+	.zone-name {
+		color: #cbd5e1;
+		font-weight: 600;
+		font-size: 1rem;
+		margin: 0;
+	}
+
+	.zone-desc {
+		color: #94a3b8;
+		font-size: 0.85rem;
+		margin: 0.25rem 0 0 0;
+	}
+
+	.zone-empty {
+		padding: 1rem;
+		color: #94a3b8;
+		font-size: 0.9rem;
+		margin: 0;
+	}
+
+	/* ============================================
+	 * GRID DE CARDS
+	 * ============================================ */
+	.cards-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+		gap: 1.5rem;
+	}
+
+	/* ============================================
+	 * ITEMS DE STOCK
+	 * ============================================ */
+	.stock-items {
+		display: flex;
+		flex-direction: column;
+		gap: 1rem;
+	}
+
+	.stock-item {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		padding: 1rem;
+		background: #0f172a;
+		border-radius: 0.35rem;
+		border: 1px solid #334155;
+		transition: all 0.2s ease;
+	}
+
+	.stock-item:hover {
+		border-color: #475569;
+		background: #1a2a3a;
+	}
+
+	.item-name {
+		color: #cbd5e1;
+		font-weight: 500;
+		margin: 0;
+		font-size: 0.95rem;
+	}
+
+	.item-info {
+		color: #94a3b8;
+		font-size: 0.85rem;
+		margin: 0.25rem 0 0 0;
+	}
+
+	.item-value {
+		text-align: right;
+	}
+
+	.item-number {
+		font-size: 1.75rem;
+		font-weight: 700;
+		margin-bottom: 0.25rem;
+	}
+
+	.item-number.amber {
+		color: #f59e0b;
+	}
+
+	.item-unit {
+		font-size: 0.75rem;
+		color: #94a3b8;
+		margin: 0;
+	}
+
+	/* ============================================
+	 * ITEMS DE INCIDENCIAS
+	 * ============================================ */
+	.incidents-list {
+		display: flex;
+		flex-direction: column;
+		gap: 1rem;
+	}
+
+	.incident-item {
+		padding: 1rem;
+		background: #0f172a;
+		border-radius: 0.35rem;
+		border: 1px solid #334155;
+		transition: all 0.2s ease;
+	}
+
+	.incident-item:hover {
+		border-color: #475569;
+		background: #1a2a3a;
+	}
+
+	.incident-header {
+		display: flex;
+		justify-content: space-between;
+		align-items: flex-start;
+		gap: 1rem;
+		margin-bottom: 0.5rem;
+	}
+
+	.incident-name {
+		color: #cbd5e1;
+		font-weight: 500;
+		margin: 0;
+		font-size: 0.95rem;
+	}
+
+	.incident-order {
+		color: #94a3b8;
+		font-size: 0.85rem;
+		margin: 0.25rem 0 0 0;
+	}
+
+	.incident-desc {
+		color: #cbd5e1;
+		font-size: 0.9rem;
+		margin: 0;
+		line-height: 1.4;
+	}
+
+	/* ============================================
+	 * RESPONSIVE
+	 * ============================================ */
+	@media (max-width: 1024px) {
+		.stats-grid {
+			grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
 		}
-		to {
-			opacity: 1;
-			transform: translateY(0);
+
+		.cards-grid {
+			grid-template-columns: 1fr;
+		}
+
+		.page-root {
+			padding: 1.5rem;
 		}
 	}
 
-	.animate-fadeIn {
-		animation: fadeIn 0.5s ease-in-out;
+	@media (max-width: 640px) {
+		.page-root {
+			padding: 1rem;
+		}
+
+		.page-title {
+			font-size: 1.5rem;
+		}
+
+		.stats-grid {
+			grid-template-columns: repeat(2, 1fr);
+			gap: 1rem;
+		}
+
+		.stat-content {
+			padding: 1.5rem 1rem;
+		}
+
+		.stat-number {
+			font-size: 2rem;
+		}
+
+		.zone-blocks {
+			gap: 1rem;
+		}
+
+		.table-wrapper {
+			font-size: 0.8rem;
+		}
+
+		.table th,
+		.table td {
+			padding: 0.5rem;
+		}
 	}
 </style>

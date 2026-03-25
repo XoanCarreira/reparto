@@ -1,10 +1,9 @@
-<!-- LAYOUT: Cliente -->
+<!-- LAYOUT: Repartidor -->
 <script>
 	/**
-	 * LAYOUT DEL CLIENTE
-	 * Página contenedora para todas las páginas del cliente
-	 * Protege el acceso: solo usuarios con rol 'client' pueden verla
-	 * Incluye la navegación y estructura común
+	 * LAYOUT DEL REPARTIDOR
+	 * Protege el acceso: solo usuarios con rol 'delivery'
+	 * Reutiliza la misma estructura visual del resto de roles.
 	 */
 
 	import { goto } from '$app/navigation';
@@ -17,7 +16,6 @@
 	let currentUser = $state();
 	let isLoading = $state(true);
 
-	// Se suscribe a cambios de autenticación
 	authStore.subscribe((user) => {
 		currentUser = user;
 
@@ -27,12 +25,11 @@
 
 		isLoading = false;
 
-		// Protege la ruta: redirige si no es cliente
-		if (user && user.role !== 'client') {
+		if (user && user.role !== 'delivery') {
 			if (user.role === 'admin') {
 				goto(resolve('/admin/dashboard'));
-			} else if (user.role === 'delivery') {
-				goto(resolve('/delivery'));
+			} else if (user.role === 'client') {
+				goto(resolve('/client/orders'));
 			} else {
 				goto(resolve('/'));
 			}
@@ -43,28 +40,24 @@
 </script>
 
 <svelte:head>
-	<title>Cliente - Reparto</title>
+	<title>Repartidor - Reparto</title>
 </svelte:head>
 
 {#if isLoading}
-	<!-- Pantalla de carga -->
 	<div class="layout-screen layout-screen-loading">
 		<div class="layout-loading-content">
 			<div class="layout-spinner animate-spin"></div>
 			<p class="layout-loading-text">Cargando...</p>
 		</div>
 	</div>
-{:else if currentUser?.role === 'client'}
-	<!-- Interfaz del cliente -->
+{:else if currentUser?.role === 'delivery'}
 	<div class="layout-screen">
-		<Navbar title="Zona Personal del Cliente" />
+		<Navbar title="Panel de Repartidor" />
 
-		<!-- Contenido principal -->
 		<main class="layout-main">
 			{@render children()}
 		</main>
 
-		<!-- Pie de página -->
 		<footer class="layout-footer">
 			<div class="layout-footer-inner">
 				<p class="layout-footer-text">

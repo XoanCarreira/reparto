@@ -41,9 +41,9 @@
 	 * Obtiene el indicador de stock disponible
 	 */
 	function getStockStatus(product) {
-		if (product.stock === 0) return { label: 'Agotado', color: 'bg-red-100 text-red-700' };
-		if (product.stock <= product.minStock) return { label: 'Bajo stock', color: 'bg-yellow-100 text-yellow-700' };
-		return { label: 'Disponible', color: 'bg-green-100 text-green-700' };
+		if (product.stock === 0) return { label: 'Agotado', tone: 'danger' };
+		if (product.stock <= product.minStock) return { label: 'Bajo stock', tone: 'warning' };
+		return { label: 'Disponible', tone: 'success' };
 	}
 </script>
 
@@ -52,24 +52,18 @@
 </svelte:head>
 
 <div class="page-root animate-fadeIn full-width-desktop">
-	<!-- Encabezado -->
 	<div class="page-header">
-		<h1 class="page-title">🛍️ Catálogo de Productos</h1>
+		<h1 class="page-title">🛍️ Catalogo de Productos</h1>
 		<p class="page-subtitle">Explora nuestros productos disponibles</p>
 	</div>
 
-	<!-- Filtro por categoría -->
 	{#if allProducts.length > 0}
-		<div class="panel-surface radius-lg p-4 sticky top-0 z-10">
-			<p class="fs-sm fw-medium txt-subtle mb-3">Filtrar por categoría:</p>
-			<div class="flex flex-wrap gap-2">
+		<div class="filters-panel">
+			<p class="filters-label">Filtrar por categoria:</p>
+			<div class="filters-list">
 				<button
 					onclick={() => (selectedCategory = 'all')}
-					class={`px-4 py-2 radius-lg fw-medium transition-colors ${
-						selectedCategory === 'all'
-							? 'bg-blue-900/40 text-blue-200 border border-blue-500/50'
-							: 'bg-panel txt-soft border bd-soft hover:bg-panel-soft'
-					}`}
+					class={`filter-btn ${selectedCategory === 'all' ? 'active' : ''}`}
 				>
 					Todos ({allProducts.length})
 				</button>
@@ -78,11 +72,7 @@
 					{@const count = allProducts.filter((p) => p.category === category).length}
 					<button
 						onclick={() => (selectedCategory = category)}
-						class={`px-4 py-2 radius-lg fw-medium transition-colors ${
-							selectedCategory === category
-								? 'bg-blue-900/40 text-blue-200 border border-blue-500/50'
-								: 'bg-panel txt-soft border bd-soft hover:bg-panel-soft'
-						}`}
+						class={`filter-btn ${selectedCategory === category ? 'active' : ''}`}
 					>
 						{category} ({count})
 					</button>
@@ -91,74 +81,261 @@
 		</div>
 	{/if}
 
-	<!-- Grid de productos -->
-	<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+	<div class="products-grid">
 		{#each filteredProducts() as product (product.id)}
 			{@const stockStatus = getStockStatus(product)}
-			<Card class="glass-slate">
-				<div class="h-full flex flex-col">
-					<!-- Encabezado del producto -->
-					<div class="mb-4">
-						<div class="flex justify-between items-start mb-2">
-							<h3 class="fs-lg fw-bold txt-primary flex-1">{product.name}</h3>
-							<span class={`text-xs fw-medium px-3 py-1 radius-full whitespace-nowrap ml-2 ${stockStatus.color}`}>
-								{stockStatus.label}
-							</span>
-						</div>
-						<p class="fs-sm txt-muted">{product.description}</p>
-					</div>
+			<div class="product-card">
+				<div class="product-header">
+					<h3 class="product-name">{product.name}</h3>
+					<span class={`stock-badge ${stockStatus.tone}`}>{stockStatus.label}</span>
+				</div>
+				<p class="product-description">{product.description}</p>
 
-					<!-- Info de stock -->
-					<div class="panel-surface-soft radius-lg p-3 mb-4">
-						<div class="flex justify-between items-center">
-							<div>
-								<p class="text-xs txt-muted">Stock disponible</p>
-								<p class="fs-lg fw-bold txt-primary">{product.stock}</p>
-							</div>
-							<div class="text-right">
-								<p class="text-xs txt-muted">Unidad</p>
-								<p class="fw-medium txt-primary">{product.unit}</p>
-							</div>
-						</div>
-					</div>
-
-					<!-- Categoría y precio -->
-					<div class="space-y-2 mb-4 flex-1">
-						<div>
-							<p class="text-xs txt-muted">Categoría</p>
-							<p class="fs-sm fw-medium txt-primary">{product.category}</p>
-						</div>
-						<div class="panel-surface-soft radius-lg p-3">
-							<p class="text-xs txt-muted">Precio por {product.unit}</p>
-							<p class="fs-2xl fw-bold text-blue-300">{formatCurrency(product.price)}</p>
-						</div>
-					</div>
-
-					<!-- Botón de agregar -->
+				<div class="product-stock-box">
 					<div>
-						<a
-							href={resolve('/client/orders/new')}
-							class="block w-full text-center px-4 py-2 panel-surface-soft text-blue-300 radius-lg hover:bg-panel-soft/70 transition-colors fw-medium fs-sm"
-						>
-							→ Agregar al pedido
-						</a>
+						<p class="meta-label">Stock disponible</p>
+						<p class="meta-value">{product.stock}</p>
+					</div>
+					<div class="align-right">
+						<p class="meta-label">Unidad</p>
+						<p class="meta-value">{product.unit}</p>
 					</div>
 				</div>
-			</Card>
+
+				<div class="product-meta">
+					<div>
+						<p class="meta-label">Categoria</p>
+						<p class="meta-value">{product.category}</p>
+					</div>
+					<div class="product-price-box">
+						<p class="meta-label">Precio por {product.unit}</p>
+						<p class="product-price">{formatCurrency(product.price)}</p>
+					</div>
+				</div>
+
+				<a href={resolve('/client/orders/new')} class="add-order-link">Agregar al pedido</a>
+			</div>
 		{/each}
 	</div>
 
-	<!-- Sin productos -->
 	{#if filteredProducts().length === 0}
-		<Card class="glass-slate">
-			<div class="text-center py-12">
-				<p class="txt-muted fs-lg">No hay productos en esta categoría</p>
+		<Card class="card-section">
+			<div class="empty-state">
+				<p>No hay productos en esta categoria</p>
 			</div>
 		</Card>
 	{/if}
 </div>
 
 <style>
+	.page-root {
+		width: 100%;
+		padding: 1.5rem;
+		background: #0f172a;
+		color: #cbd5e1;
+	}
+
+	.page-header {
+		margin-bottom: 1.25rem;
+	}
+
+	.page-title {
+		margin: 0;
+		font-size: 2rem;
+		font-weight: 700;
+		color: #f1f5f9;
+	}
+
+	.page-subtitle {
+		margin: 0.5rem 0 0;
+		font-size: 0.95rem;
+		color: #94a3b8;
+	}
+
+	.filters-panel {
+		position: sticky;
+		top: 0;
+		z-index: 10;
+		background: #1e293b;
+		border: 1px solid #334155;
+		border-radius: 0.5rem;
+		padding: 1rem;
+		margin-bottom: 1rem;
+	}
+
+	.filters-label {
+		margin: 0 0 0.65rem;
+		font-size: 0.85rem;
+		font-weight: 600;
+		color: #cbd5e1;
+	}
+
+	.filters-list {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.5rem;
+	}
+
+	.filter-btn {
+		padding: 0.45rem 0.75rem;
+		border-radius: 0.4rem;
+		border: 1px solid #334155;
+		background: #0f172a;
+		color: #cbd5e1;
+		font-weight: 600;
+		font-size: 0.85rem;
+		cursor: pointer;
+		transition: all 0.2s ease;
+	}
+
+	.filter-btn:hover {
+		border-color: #475569;
+		background: #172337;
+	}
+
+	.filter-btn.active {
+		border-color: #3b82f6;
+		background: rgba(37, 99, 235, 0.2);
+		color: #bfdbfe;
+	}
+
+	.products-grid {
+		display: grid;
+		grid-template-columns: repeat(1, minmax(0, 1fr));
+		gap: 1rem;
+	}
+
+	.product-card {
+		display: flex;
+		flex-direction: column;
+		gap: 0.8rem;
+		padding: 1rem;
+		background: #1e293b;
+		border: 1px solid #334155;
+		border-radius: 0.5rem;
+	}
+
+	.product-header {
+		display: flex;
+		justify-content: space-between;
+		align-items: flex-start;
+		gap: 0.7rem;
+	}
+
+	.product-name {
+		margin: 0;
+		font-size: 1rem;
+		font-weight: 700;
+		color: #f1f5f9;
+	}
+
+	.stock-badge {
+		padding: 0.22rem 0.6rem;
+		border-radius: 999px;
+		font-size: 0.75rem;
+		font-weight: 700;
+		white-space: nowrap;
+	}
+
+	.stock-badge.success {
+		background: rgba(16, 185, 129, 0.2);
+		color: #6ee7b7;
+	}
+
+	.stock-badge.warning {
+		background: rgba(245, 158, 11, 0.2);
+		color: #fcd34d;
+	}
+
+	.stock-badge.danger {
+		background: rgba(239, 68, 68, 0.2);
+		color: #fca5a5;
+	}
+
+	.product-description {
+		margin: 0;
+		font-size: 0.85rem;
+		color: #94a3b8;
+		line-height: 1.35;
+	}
+
+	.product-stock-box,
+	.product-price-box {
+		background: #0f172a;
+		border: 1px solid #334155;
+		border-radius: 0.45rem;
+		padding: 0.75rem;
+	}
+
+	.product-stock-box {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		gap: 0.75rem;
+	}
+
+	.product-meta {
+		display: grid;
+		gap: 0.6rem;
+		flex: 1;
+	}
+
+	.meta-label {
+		margin: 0;
+		font-size: 0.75rem;
+		color: #94a3b8;
+	}
+
+	.meta-value {
+		margin: 0.25rem 0 0;
+		font-size: 0.95rem;
+		font-weight: 600;
+		color: #f1f5f9;
+	}
+
+	.product-price {
+		margin: 0.25rem 0 0;
+		font-size: 1.2rem;
+		font-weight: 700;
+		color: #60a5fa;
+	}
+
+	.align-right {
+		text-align: right;
+	}
+
+	.add-order-link {
+		display: block;
+		padding: 0.58rem 0.8rem;
+		background: #0f172a;
+		border: 1px solid #334155;
+		border-radius: 0.45rem;
+		text-align: center;
+		text-decoration: none;
+		font-weight: 600;
+		font-size: 0.85rem;
+		color: #93c5fd;
+		transition: all 0.2s ease;
+	}
+
+	.add-order-link:hover {
+		border-color: #3b82f6;
+		background: #172337;
+	}
+
+	.card-section {
+		background: #1e293b;
+		border: 1px solid #334155;
+		border-radius: 0.5rem;
+		padding: 1rem;
+	}
+
+	.empty-state {
+		padding: 1rem;
+		text-align: center;
+		color: #94a3b8;
+	}
+
 	@keyframes fadeIn {
 		from {
 			opacity: 0;
@@ -172,5 +349,31 @@
 
 	.animate-fadeIn {
 		animation: fadeIn 0.5s ease-in-out;
+	}
+
+	.full-width-desktop {
+		width: 100%;
+	}
+
+	@media (min-width: 768px) {
+		.products-grid {
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+		}
+	}
+
+	@media (min-width: 1024px) {
+		.products-grid {
+			grid-template-columns: repeat(3, minmax(0, 1fr));
+		}
+	}
+
+	@media (max-width: 640px) {
+		.page-root {
+			padding: 1rem;
+		}
+
+		.page-title {
+			font-size: 1.6rem;
+		}
 	}
 </style>

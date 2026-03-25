@@ -64,6 +64,8 @@
 				await goto(resolve('/admin/dashboard'));
 			} else if (result.user.role === 'client') {
 				await goto(resolve('/client/orders'));
+			} else if (result.user.role === 'delivery') {
+				await goto(resolve('/delivery'));
 			}
 		} catch {
 			error = 'Error al iniciar sesión. Por favor intenta nuevamente.';
@@ -78,6 +80,9 @@
 		if (role === 'admin') {
 			email = 'admin@empresa.com';
 			password = 'admin123';
+		} else if (role === 'delivery') {
+			email = 'repartidor1@empresa.com';
+			password = 'repartidor123';
 		} else {
 			email = 'cliente1@empresa.com';
 			password = 'cliente123';
@@ -173,6 +178,14 @@
 
 					<button
 						type="button"
+						onclick={() => fillTestCredentials('delivery')}
+						class="test-credential-btn test-credential-btn-delivery"
+					>
+						🚚 Repartidor: repartidor1@empresa.com
+					</button>
+
+					<button
+						type="button"
 						onclick={() => fillTestCredentials('client')}
 						class="test-credential-btn test-credential-btn-client"
 					>
@@ -181,7 +194,7 @@
 				</div>
 
 				<p class="test-credentials-note">
-					Admin: admin123 • Cliente: cliente123
+					Admin: admin123 • Repartidor: repartidor123 • Cliente: cliente123
 				</p>
 			</div>
 		</div>
@@ -332,6 +345,16 @@
 
 	.test-credential-btn-admin:hover {
 		background: rgba(30, 64, 175, 0.5);
+	}
+
+	.test-credential-btn-delivery {
+		background: rgba(124, 45, 18, 0.35);
+		border: 1px solid rgba(251, 146, 60, 0.5);
+		color: #fdba74;
+	}
+
+	.test-credential-btn-delivery:hover {
+		background: rgba(154, 52, 18, 0.5);
 	}
 
 	.test-credential-btn-client {

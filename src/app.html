@@ -13,7 +13,6 @@
 		<link rel="icon" href="/favicon.svg" type="image/svg+xml" />
 		%sveltekit.head%
 		<style>
-			@import 'https://cdn.jsdelivr.net/npm/tailwindcss@3.3.0/tailwind.min.css';
 
 			/* Variables CSS globales - Tema Oscuro VS Code */
 			:root {
@@ -37,6 +36,14 @@
 			html, body {
 				margin: 0;
 				padding: 0;
+				overflow-x: hidden;
+			}
+
+			/* Caja consistente para evitar desbordamientos por padding/border */
+			*,
+			*::before,
+			*::after {
+				box-sizing: border-box;
 			}
 
 			html {
@@ -160,6 +167,7 @@
 
 			input[type='number'] {
 				-moz-appearance: textfield;
+				appearance: textfield;
 			}
 
 			/* Placeholder styling */
@@ -289,7 +297,7 @@
 				gap: 2.5rem;
 			}
 
-			/* Utilidades visuales robustas (no dependen de clases dinamicas de Tailwind) */
+			/* Utilidades visuales robustas para layouts amplios */
 			@media (min-width: 1280px) {
 				.full-width-desktop {
 					width: 100%;
@@ -313,6 +321,8 @@
 				border: 2px solid #ffffff !important;
 				box-shadow: 0 16px 30px rgba(0, 0, 0, 0.45) !important;
 				padding: 0.4rem;
+				min-width: 0;
+				max-width: 100%;
 			}
 
 			.panel-surface-soft {
@@ -320,6 +330,8 @@
 				border: 0 !important;
 				box-shadow: 0 10px 22px rgba(0, 0, 0, 0.35) !important;
 				padding: 0.75rem;
+				min-width: 0;
+				max-width: 100%;
 			}
 
 			.glass-blue,
@@ -334,11 +346,14 @@
 				border: 2px solid #ffffff !important;
 				box-shadow: 0 16px 30px rgba(0, 0, 0, 0.45) !important;
 				padding: 0.4rem;
+				min-width: 0;
+				max-width: 100%;
 			}
 
 			.page-root {
 				display: grid;
 				gap: 2rem;
+				min-width: 0;
 			}
 
 			.page-header {
@@ -364,6 +379,7 @@
 				justify-content: space-between;
 				align-items: center;
 				gap: 1rem;
+				min-width: 0;
 			}
 
 			/* Semantic style tokens used across routes (CSS-first replacement) */
@@ -455,110 +471,70 @@
 				font-size: 3rem;
 			}
 
-			/* Visual bridge for remaining legacy utility-like tokens */
-			.text-center {
-				text-align: center;
-			}
-
-			.text-left {
-				text-align: left;
-			}
-
-			.text-right {
-				text-align: right;
-			}
-
-			.text-xs {
-				font-size: 0.75rem;
-			}
-
-			.rounded {
-				border-radius: 0.25rem;
-			}
-
-			.border-b {
-				border-bottom: 1px solid;
-			}
-
-			.border-b-2 {
-				border-bottom: 2px solid;
-			}
-
-			.border-t {
-				border-top: 1px solid;
-			}
-
-			.bg-slate-900\/40 {
-				background: rgba(15, 23, 42, 0.4);
-			}
-
-			.bg-panel-soft\/50 {
-				background: rgba(51, 65, 85, 0.5);
-			}
-
-			.bg-panel-soft\/30 {
+			/* Variantes semanticas adicionales */
+			.bg-panel-soft-30 {
 				background: rgba(51, 65, 85, 0.3);
 			}
 
-			.bg-black\/60 {
-				background: rgba(0, 0, 0, 0.6);
+			.bg-panel-soft-50 {
+				background: rgba(51, 65, 85, 0.5);
 			}
 
-			.text-white {
-				color: #fff;
+			.hover-bg-panel-soft-70:hover {
+				background: rgba(51, 65, 85, 0.7);
 			}
 
-			.text-blue-900 { color: #1e3a8a; }
-			.text-blue-700 { color: #1d4ed8; }
-			.text-blue-600 { color: #2563eb; }
-			.text-blue-400 { color: #60a5fa; }
-			.text-blue-300 { color: #93c5fd; }
-			.text-blue-200 { color: #bfdbfe; }
-			.text-green-800 { color: #166534; }
-			.text-green-700 { color: #15803d; }
-			.text-green-600 { color: #16a34a; }
-			.text-green-400 { color: #4ade80; }
-			.text-emerald-400 { color: #34d399; }
-			.text-emerald-300 { color: #6ee7b7; }
-			.text-red-800 { color: #991b1b; }
-			.text-red-700 { color: #b91c1c; }
-			.text-red-300 { color: #fca5a5; }
-			.text-yellow-800 { color: #854d0e; }
-			.text-yellow-600 { color: #ca8a04; }
-			.text-yellow-400 { color: #facc15; }
-			.text-purple-600 { color: #9333ea; }
-			.text-violet-300 { color: #c4b5fd; }
-			.text-violet-300\/80 { color: rgba(196, 181, 253, 0.8); }
-			.text-violet-200 { color: #ddd6fe; }
-			.text-amber-300 { color: #fcd34d; }
-			.text-amber-200 { color: #fde68a; }
+			.hover-bg-panel-soft-55:hover {
+				background: rgba(51, 65, 85, 0.55);
+			}
 
-			.bg-blue-600 { background: #2563eb; }
-			.bg-green-600 { background: #16a34a; }
-			.bg-green-500 { background: #22c55e; }
-			.bg-emerald-600 { background: #059669; }
-			.bg-red-600 { background: #dc2626; }
-			.bg-red-500 { background: #ef4444; }
-			.bg-yellow-500 { background: #eab308; }
-			.bg-green-100 { background: #dcfce7; }
-			.bg-red-100 { background: #fee2e2; }
-			.bg-yellow-100 { background: #fef9c3; }
+			.hover-bg-panel-soft-50:hover {
+				background: rgba(51, 65, 85, 0.5);
+			}
 
-			.hover\:bg-blue-700:hover { background: #1d4ed8; }
-			.hover\:bg-green-700:hover { background: #15803d; }
-			.hover\:bg-emerald-700:hover { background: #047857; }
-			.hover\:bg-red-700:hover { background: #b91c1c; }
-			.hover\:bg-red-200:hover { background: #fecaca; }
-			.hover\:bg-green-200:hover { background: #bbf7d0; }
-			.hover\:bg-panel-soft:hover { background: #334155; }
-			.hover\:bg-panel-soft\/70:hover { background: rgba(51, 65, 85, 0.7); }
-			.hover\:bg-panel-soft\/55:hover { background: rgba(51, 65, 85, 0.55); }
-			.hover\:bg-panel-soft\/50:hover { background: rgba(51, 65, 85, 0.5); }
-			.hover\:bg-panel\/40:hover { background: rgba(30, 41, 59, 0.4); }
-			.hover\:bg-panel\/30:hover { background: rgba(30, 41, 59, 0.3); }
-			.hover\:text-blue-800:hover { color: #1e40af; }
+			.hover-bg-panel-40:hover {
+				background: rgba(30, 41, 59, 0.4);
+			}
+
+			.hover-bg-panel-30:hover {
+				background: rgba(30, 41, 59, 0.3);
+			}
+
+			/* Scroll horizontal reutilizable para contenedores de tablas */
+			.table-scroll {
+				overflow-x: auto;
+				overflow-y: hidden;
+				max-width: 100%;
+				-webkit-overflow-scrolling: touch;
+			}
 
 			@media (max-width: 639px) {
+				/* En móvil reducimos padding interno para prevenir roturas de bloque */
+				.panel-surface,
+				.glass-blue,
+				.glass-emerald,
+				.glass-red,
+				.glass-violet,
+				.glass-cyan,
+				.glass-slate,
+				.glass-rose,
+				.glass-amber {
+					padding: 0.25rem;
+				}
+
+				.panel-surface-soft {
+					padding: 0.5rem;
+				}
+
+				/* Si hay clases de ancho mínimo o fit, en móvil priorizamos ancho fluido */
+				[class*='min-w-'] {
+					min-width: 0 !important;
+				}
+
+				[class*='w-fit'] {
+					width: 100% !important;
+				}
+
 				.page-title {
 					font-size: 1.875rem;
 				}

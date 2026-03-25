@@ -5,7 +5,7 @@
  */
 
 import { writable, derived } from 'svelte/store';
-import { products, zones, orders, incidents, users } from '../data/mockData.js';
+import { products, zones, orders, incidents, users, deliveryStaff } from '../data/mockData.js';
 
 function getAverageOrderAmountByMonth(clientOrders, year, month) {
 	const monthOrders = clientOrders.filter((order) => {
@@ -179,6 +179,14 @@ function createProductsStore() {
 		},
 
 		/**
+		 * Elimina un producto del catalogo
+		 * @param {number} productId - ID del producto
+		 */
+		remove: (productId) => {
+			update((products) => products.filter((p) => p.id !== productId));
+		},
+
+		/**
 		 * Obtiene todos los productos que están bajo stock mínimo
 		 * @returns {array}
 		 */
@@ -316,6 +324,14 @@ function createZonesStore() {
 					};
 				})
 			);
+		},
+
+		/**
+		 * Elimina una zona
+		 * @param {number} zoneId - ID de la zona
+		 */
+		remove: (zoneId) => {
+			update((zones) => zones.filter((zone) => zone.id !== zoneId));
 		}
 	};
 }
@@ -375,6 +391,14 @@ function createClientsStore() {
 					};
 				})
 			);
+		},
+
+		/**
+		 * Elimina un cliente
+		 * @param {number} clientId - ID del cliente
+		 */
+		remove: (clientId) => {
+			update((clients) => clients.filter((client) => client.id !== clientId));
 		}
 	};
 }
@@ -506,6 +530,31 @@ function createOrdersStore() {
 					productsStore.decreaseStock(item.productId, item.quantity);
 				});
 			}
+		},
+
+		/**
+		 * Marca un pedido como en reparto.
+		 * @param {number} orderId - ID del pedido
+		 */
+		markInDelivery: (orderId) => {
+			update((orders) =>
+				orders.map((o) => (o.id === orderId ? { ...o, status: 'in_delivery' } : o))
+			);
+		},
+
+		/**
+		 * Guarda/actualiza una nota operativa de entrega en el pedido.
+		 * @param {number} orderId - ID del pedido
+		 * @param {string} note - Nota del repartidor
+		 */
+		updateDeliveryNote: (orderId, note) => {
+			update((orders) =>
+				orders.map((o) =>
+					o.id === orderId
+						? { ...o, deliveryNote: String(note || '').trim(), deliveryNoteAt: new Date() }
+						: o
+				)
+			);
 		},
 
 		/**
@@ -679,6 +728,155 @@ function createZoneClientMetricsStore() {
 	};
 }
 
+/**
+ * Store reactivo para los repartidores (delivery staff)
+ * Gestiona asignación de rutas, disponibilidad y cambios de zona
+ */
+function createDeliveryStaffStore() {
+	const { subscribe, update } = writable([...deliveryStaff]);
+
+	return {
+		subscribe,
+
+		/**
+		 * Obtiene todos los repartidores
+		 * @returns {array}
+		 */
+		getAll: () => {
+			let allStaff = [];
+			subscribe((staff) => {
+				allStaff = staff;
+			})();
+			return allStaff;
+		},
+
+		/**
+		 * Obtiene los repartidores libres (sin zona asignada)
+		 * @returns {array}
+		 */
+		getFreeStaff: () => {
+			let freeStaff = [];
+			subscribe((staff) => {
+				freeStaff = staff.filter((s) => s.zoneId === null);
+			})();
+			return freeStaff;
+		},
+
+		/**
+		 * Obtiene los repartidores asignados a una zona específica
+		 * @param {number} zoneId - ID de la zona
+		 * @returns {array}
+		 */
+		getByZone: (zoneId) => {
+			let zoneStaff = [];
+			subscribe((staff) => {
+				zoneStaff = staff.filter((s) => Number(s.zoneId) === Number(zoneId));
+			})();
+			return zoneStaff;
+		},
+
+		/**
+		 * Obtiene un repartidor por su ID
+		 * @param {number} staffId - ID del repartidor
+		 * @returns {object|null}
+		 */
+		getById: (staffId) => {
+			let staff = null;
+			subscribe((allStaff) => {
+				staff = allStaff.find((s) => s.id === staffId);
+			})();
+			return staff;
+		},
+
+		/**
+		 * Asigna una zona a un repartidor
+		 * @param {number} staffId - ID del repartidor
+		 * @param {number} zoneId - ID de la zona (null para desasignar)
+		 */
+		assignZone: (staffId, zoneId) => {
+			update((staff) =>
+				staff.map((s) =>
+					s.id === staffId ? { ...s, zoneId: zoneId === null ? null : Number(zoneId) } : s
+				)
+			);
+		},
+
+		/**
+		 * Actualiza el estado de un repartidor
+		 * @param {number} staffId - ID del repartidor
+		 * @param {string} newStatus - Nuevo estado (active, off, on_delivery)
+		 */
+		updateStatus: (staffId, newStatus) => {
+			update((staff) =>
+				staff.map((s) => (s.id === staffId ? { ...s, status: newStatus } : s))
+			);
+		},
+
+		/**
+		 * Actualiza datos de un repartidor
+		 * @param {number} staffId - ID del repartidor
+		 * @param {object} updates - Campos editables
+		 */
+		updateStaff: (staffId, updates) => {
+			update((staff) =>
+				staff.map((member) => {
+					if (member.id !== staffId) {
+						return member;
+					}
+
+					return {
+						...member,
+						...updates,
+						name: typeof updates.name === 'string' ? updates.name.trim() : member.name,
+						phone: typeof updates.phone === 'string' ? updates.phone.trim() : member.phone,
+						vehicle: typeof updates.vehicle === 'string' ? updates.vehicle.trim() : member.vehicle,
+						status: typeof updates.status === 'string' ? updates.status : member.status,
+						zoneId:
+							updates.zoneId === '' || updates.zoneId === null || updates.zoneId === undefined
+								? null
+								: Number(updates.zoneId)
+					};
+				})
+			);
+		},
+
+		/**
+		 * Crea un nuevo repartidor
+		 * @param {object} payload - Datos del repartidor
+		 * @returns {number} ID del repartidor creado
+		 */
+		create: (payload) => {
+			let newStaffId = 0;
+
+			update((staff) => {
+				const maxId = Math.max(...staff.map((item) => item.id), 200);
+				newStaffId = maxId + 1;
+
+				const newStaffMember = {
+					id: newStaffId,
+					name: payload.name?.trim() || `Repartidor ${newStaffId}`,
+					zoneId: payload.zoneId === null || payload.zoneId === '' ? null : Number(payload.zoneId),
+					phone: payload.phone?.trim() || '',
+					vehicle: payload.vehicle?.trim() || 'Vehiculo sin definir',
+					status: payload.status?.trim() || 'active'
+				};
+
+				return [...staff, newStaffMember];
+			});
+
+			return newStaffId;
+		},
+
+		/**
+		 * Elimina un repartidor
+		 * @param {number} staffId - ID del repartidor
+		 */
+		remove: (staffId) => {
+			update((staff) => staff.filter((member) => member.id !== staffId));
+		}
+	};
+}
+
 // Exporta los stores
 export const productsStore = createProductsStore();
 export const zonesStore = createZonesStore();
@@ -686,6 +884,7 @@ export const clientsStore = createClientsStore();
 export const ordersStore = createOrdersStore();
 export const incidentsStore = createIncidentsStore();
 export const zoneClientMetricsStore = createZoneClientMetricsStore();
+export const deliveryStaffStore = createDeliveryStaffStore();
 
 /**
  * Derived store: Productos con stock bajo

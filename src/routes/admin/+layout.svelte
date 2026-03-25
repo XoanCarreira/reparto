@@ -29,7 +29,13 @@
 
 		// Protege la ruta: redirige si no es admin
 		if (user && user.role !== 'admin') {
-			goto(resolve('/client/orders'));
+			if (user.role === 'client') {
+				goto(resolve('/client/orders'));
+			} else if (user.role === 'delivery') {
+				goto(resolve('/delivery'));
+			} else {
+				goto(resolve('/'));
+			}
 		} else if (!user) {
 			goto(resolve('/'));
 		}

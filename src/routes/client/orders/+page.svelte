@@ -156,52 +156,48 @@
 </svelte:head>
 
 <div class="page-root animate-fadeIn full-width-desktop">
-	<!-- Encabezado -->
 	<div class="page-header">
 		<h1 class="page-title">📦 Mis Pedidos</h1>
 		<p class="page-subtitle">Solicitudes de entrega y gestión de tu cuenta</p>
 	</div>
 
-	<!-- Información de próxima entrega -->
 	{#if nextDeliveryZone}
 		{@const countdown = getDeliveryCountdown()}
 		{@const deliveryInfo = getDeliveryInfo()}
-		<Card class="glass-violet">
-			<div class="grid grid-cols-1 md:grid-cols-2 gap-8 radius-lg panel-surface-soft">
-				<div>
-					<h3 class="fs-xl fw-bold txt-primary mb-4">📅 Próxima Entrega</h3>
-					<div class="space-y-4">
-						<div>
-							<p class="fs-sm txt-muted">Fecha</p>
-							<p class="fs-lg fw-semibold text-blue-400 mt-2">
-								{countdown && countdown.message}
-							</p>
+		<Card class="card-section">
+			<div class="delivery-panel-grid">
+				<div class="delivery-panel-block">
+					<h3 class="panel-title">📅 Próxima Entrega</h3>
+					<div class="panel-info-list">
+						<div class="panel-info-item">
+							<p class="item-label">Fecha</p>
+							<p class="item-value item-value-blue">{countdown && countdown.message}</p>
 						</div>
-						<div>
-							<p class="fs-sm txt-muted">Días de reparto</p>
-							<p class="txt-subtle mt-2">{deliveryInfo.days}</p>
+						<div class="panel-info-item">
+							<p class="item-label">Días de reparto</p>
+							<p class="item-value">{deliveryInfo.days}</p>
 						</div>
-						<div>
-							<p class="fs-sm txt-muted">Horario</p>
-							<p class="txt-subtle mt-2">{deliveryInfo.time}</p>
+						<div class="panel-info-item">
+							<p class="item-label">Horario</p>
+							<p class="item-value">{deliveryInfo.time}</p>
 						</div>
 					</div>
 				</div>
 
-				<div>
-					<h3 class="fs-xl fw-bold txt-primary mb-4">📍 Zona de Reparto</h3>
-					<div class="space-y-4">
-						<div>
-							<p class="fs-sm txt-muted">Zona</p>
-							<p class="fs-lg fw-semibold txt-primary mt-2">{nextDeliveryZone.name}</p>
+				<div class="delivery-panel-block">
+					<h3 class="panel-title">📍 Zona de Reparto</h3>
+					<div class="panel-info-list">
+						<div class="panel-info-item">
+							<p class="item-label">Zona</p>
+							<p class="item-value item-value-strong">{nextDeliveryZone.name}</p>
 						</div>
-						<div>
-							<p class="fs-sm txt-muted">Ubicación</p>
-							<p class="txt-subtle mt-2">{deliveryInfo.location}</p>
+						<div class="panel-info-item">
+							<p class="item-label">Ubicación</p>
+							<p class="item-value">{deliveryInfo.location}</p>
 						</div>
-						<div>
-							<p class="fs-sm txt-muted">Descripción</p>
-							<p class="txt-subtle mt-2">{nextDeliveryZone.description}</p>
+						<div class="panel-info-item">
+							<p class="item-label">Descripción</p>
+							<p class="item-value">{nextDeliveryZone.description}</p>
 						</div>
 					</div>
 				</div>
@@ -209,82 +205,70 @@
 		</Card>
 	{/if}
 
-	<!-- Resumen de pedidos -->
-	<div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-		<Card class="glass-amber">
-			<div class="text-center py-6 px-4 radius-lg panel-surface-soft">
-				<div class="fs-5xl fw-bold text-yellow-400 mb-3">{pendingOrders.length}</div>
-				<p class="txt-subtle fw-semibold">Pedidos Pendientes</p>
-				<p class="fs-sm txt-muted mt-3">{formatCurrency(getPendingTotal())}</p>
+	<div class="stats-grid stats-grid-3">
+		<div class="stat-card amber">
+			<div class="stat-content">
+				<div class="stat-value">{pendingOrders.length}</div>
+				<p class="stat-label">Pedidos Pendientes</p>
+				<p class="stat-meta">{formatCurrency(getPendingTotal())}</p>
 			</div>
-		</Card>
+		</div>
 
-		<Card class="glass-emerald">
-			<div class="text-center py-6 px-4 radius-lg panel-surface-soft">
-				<div class="fs-5xl fw-bold text-emerald-400 mb-3">{deliveredOrders.length}</div>
-				<p class="txt-subtle fw-semibold">Pedidos Entregados</p>
-				<p class="fs-sm txt-muted mt-3">Historial completado</p>
+		<div class="stat-card emerald">
+			<div class="stat-content">
+				<div class="stat-value">{deliveredOrders.length}</div>
+				<p class="stat-label">Pedidos Entregados</p>
+				<p class="stat-meta">Historial completado</p>
 			</div>
-		</Card>
+		</div>
 
-		<Card class="glass-blue">
-			<div class="text-center py-6 px-4 radius-lg panel-surface-soft">
-				<div class="fs-5xl fw-bold text-blue-400 mb-3">{clientOrders.length}</div>
-				<p class="txt-subtle fw-semibold">Total de Pedidos</p>
-				<p class="fs-sm txt-muted mt-3">Todos los tiempos</p>
+		<div class="stat-card blue">
+			<div class="stat-content">
+				<div class="stat-value">{clientOrders.length}</div>
+				<p class="stat-label">Total de Pedidos</p>
+				<p class="stat-meta">Todos los tiempos</p>
 			</div>
-		</Card>
+		</div>
 	</div>
 
-	<!-- Botón para crear nuevo pedido -->
-	<div class="text-center">
-		<a
-			href={resolve('/client/orders/new')}
-			class="inline-block px-6 py-3 bg-blue-600 text-white radius-lg hover:bg-blue-700 transition-colors fw-medium"
-		>
-			+ Crear Nuevo Pedido
-		</a>
+	<div class="action-bar">
+		<a href={resolve('/client/orders/new')} class="primary-link-btn">+ Crear Nuevo Pedido</a>
 	</div>
 
-	<!-- Pedidos pendientes -->
 	{#if pendingOrders.length > 0}
-		<Card title="⏳ Pedidos Pendientes" titleClass="text-amber-300" class="glass-amber">
-			<div class="space-y-4 radius-lg panel-surface-soft">
+		<Card title="⏳ Pedidos Pendientes" titleClass="title-amber" class="card-section">
+			<div class="orders-list">
 				{#each pendingOrders as order (order.id)}
-					<div class="radius-lg p-6 panel-surface-soft hover:bg-panel-soft/55 transition-colors">
-						<div class="flex justify-between items-start mb-4">
+					<div class="order-card">
+						<div class="order-header">
 							<div>
-								<p class="fw-bold txt-primary fs-lg">Pedido #{order.id}</p>
-								<p class="fs-sm txt-muted mt-1">{formatDate(order.createdAt)}</p>
+								<p class="order-id">Pedido #{order.id}</p>
+								<p class="order-date">{formatDate(order.createdAt)}</p>
 							</div>
 							<Badge status={order.status} />
 						</div>
 
-						<div class="bg-panel-soft/50 rounded p-4 mb-4">
-							<p class="fs-sm fw-medium txt-subtle mb-3">Items ({countItems(order.items)})</p>
-							<div class="fs-sm txt-soft space-y-2">
+						<div class="order-items-box">
+							<p class="order-items-title">Items ({countItems(order.items)})</p>
+							<div class="order-items-list">
 								{#each order.items as item (item.productId)}
-									<p>• {item.quantity}× unidades - {formatCurrency(item.unitPrice * item.quantity)}</p>
+									<p>• {item.quantity}x unidades - {formatCurrency(item.unitPrice * item.quantity)}</p>
 								{/each}
 							</div>
 						</div>
 
-						<div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4 pb-4 border-b bd-soft">
+						<div class="order-summary-row">
 							<div>
-								<p class="fs-sm txt-muted">Entrega programada</p>
-								<p class="fw-semibold txt-primary">{formatDate(order.scheduledDelivery)}</p>
+								<p class="summary-label">Entrega programada</p>
+								<p class="summary-value">{formatDate(order.scheduledDelivery)}</p>
 							</div>
-							<div class="text-right">
-								<p class="fs-sm txt-muted">Total</p>
-								<p class="fs-xl fw-bold text-blue-400">{formatCurrency(order.totalAmount)}</p>
+							<div class="summary-total-box">
+								<p class="summary-label">Total</p>
+								<p class="summary-total">{formatCurrency(order.totalAmount)}</p>
 							</div>
 						</div>
 
-						<Button
-							variant="danger"
-							size="sm"
-							onclick={() => openIncidentModal(order.id)}
-						>
+						<Button variant="danger" size="sm" onclick={() => openIncidentModal(order.id)}>
 							⚠️ Reportar Problema
 						</Button>
 					</div>
@@ -293,28 +277,23 @@
 		</Card>
 	{/if}
 
-	<!-- Pedidos entregados -->
 	{#if deliveredOrders.length > 0}
-		<Card title="✅ Historial de Entregas" titleClass="text-emerald-300" class="glass-emerald">
-			<div class="space-y-3 radius-lg panel-surface-soft">
+		<Card title="✅ Historial de Entregas" titleClass="title-emerald" class="card-section">
+			<div class="delivered-list">
 				{#each deliveredOrders.slice(0, 5) as order (order.id)}
-					<div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 p-4 bg-panel-soft/30 radius-lg hover:bg-panel-soft/50 transition-colors">
+					<div class="delivered-card">
 						<div>
-							<p class="fw-medium txt-primary">Pedido #{order.id}</p>
-							<p class="fs-sm txt-muted mt-1">
+							<p class="order-id order-id-compact">Pedido #{order.id}</p>
+							<p class="order-date">
 								{countItems(order.items)} items • {formatDate(order.deliveredAt || order.createdAt)}
 							</p>
 						</div>
-						<div class="flex items-center gap-4">
-							<div class="text-right">
-								<p class="fw-semibold txt-primary">{formatCurrency(order.totalAmount)}</p>
+						<div class="delivered-actions">
+							<div class="summary-total-box">
+								<p class="summary-value">{formatCurrency(order.totalAmount)}</p>
 								<Badge status={order.status} />
 							</div>
-							<Button
-								variant="secondary"
-								size="sm"
-								onclick={() => openIncidentModal(order.id)}
-							>
+							<Button variant="secondary" size="sm" onclick={() => openIncidentModal(order.id)}>
 								⚠️ Reportar
 							</Button>
 						</div>
@@ -322,96 +301,64 @@
 				{/each}
 
 				{#if deliveredOrders.length > 5}
-					<p class="text-center fs-sm txt-muted py-2">...y {deliveredOrders.length - 5} más</p>
+					<p class="list-more-note">...y {deliveredOrders.length - 5} mas</p>
 				{/if}
 			</div>
 		</Card>
 	{/if}
 
-	<!-- Sin pedidos -->
 	{#if clientOrders.length === 0}
-		<Card class="glass-slate">
-			<div class="text-center py-12">
-				<p class="txt-muted fs-lg mb-4">Aún no tienes pedidos</p>
-				<a
-					href={resolve('/client/orders/new')}
-					class="inline-block px-6 py-2 bg-blue-600 text-white radius-lg hover:bg-blue-700 transition-colors"
-				>
-					Crear tu primer pedido
-				</a>
+		<Card class="card-section">
+			<div class="empty-state">
+				<p class="empty-text">Aun no tienes pedidos</p>
+				<a href={resolve('/client/orders/new')} class="primary-link-btn">Crear tu primer pedido</a>
 			</div>
 		</Card>
 	{/if}
 
-	<!-- Modal de Incidencias -->
 	{#if showIncidentModal}
-		<div class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-			<div class="bg-panel border bd-mid radius-xl shadow-2xl w-full max-w-md animate-fadeIn">
-				<!-- Header -->
-				<div class="border-b bd-mid p-6">
-					<h3 class="fs-xl fw-bold txt-primary">Reportar Problema - Pedido #{selectedOrderId}</h3>
-					<p class="fs-sm txt-muted mt-2">Cuéntanos qué sucedió con tu pedido</p>
+		<div class="modal-overlay" role="dialog" aria-modal="true">
+			<div class="modal-card animate-fadeIn">
+				<div class="modal-header">
+					<h3 class="modal-title">Reportar Problema - Pedido #{selectedOrderId}</h3>
+					<p class="modal-subtitle">Cuentanos que sucedio con tu pedido</p>
 				</div>
 
-				<!-- Form -->
-				<div class="p-6 space-y-5">
-					<!-- Tipo de Incidencia -->
-					<div>
-						<label for="incident-type" class="block fs-sm fw-medium txt-subtle mb-2">
-							Tipo de Problema
-						</label>
-						<select
-							id="incident-type"
-							bind:value={incidentForm.type}
-							class="w-full px-4 py-2 bg-panel-soft border bd-soft radius-lg txt-primary focus:outline-none focus:border-blue-500 transition-colors"
-						>
-							<option value="damaged">🔨 Producto Dañado</option>
-							<option value="delayed">⏰ Retraso en Entrega</option>
-							<option value="wrong_quantity">📦 Cantidad Incorrecta</option>
-							<option value="other">❓ Otro Problema</option>
+				<div class="modal-form">
+					<div class="form-group">
+						<label for="incident-type" class="form-label">Tipo de Problema</label>
+						<select id="incident-type" bind:value={incidentForm.type} class="form-input">
+							<option value="damaged">Producto Danado</option>
+							<option value="delayed">Retraso en Entrega</option>
+							<option value="wrong_quantity">Cantidad Incorrecta</option>
+							<option value="other">Otro Problema</option>
 						</select>
 					</div>
 
-					<!-- Prioridad -->
-					<div>
-						<label for="incident-priority" class="block fs-sm fw-medium txt-subtle mb-2">
-							Prioridad
-						</label>
-						<select
-							id="incident-priority"
-							bind:value={incidentForm.priority}
-							class="w-full px-4 py-2 bg-panel-soft border bd-soft radius-lg txt-primary focus:outline-none focus:border-blue-500 transition-colors"
-						>
-							<option value="low">🟢 Baja</option>
-							<option value="medium">🟡 Media</option>
-							<option value="high">🔴 Alta</option>
+					<div class="form-group">
+						<label for="incident-priority" class="form-label">Prioridad</label>
+						<select id="incident-priority" bind:value={incidentForm.priority} class="form-input">
+							<option value="low">Baja</option>
+							<option value="medium">Media</option>
+							<option value="high">Alta</option>
 						</select>
 					</div>
 
-					<!-- Descripción -->
-					<div>
-						<label for="incident-description" class="block fs-sm fw-medium txt-subtle mb-2">
-							Descripción Detallada *
-						</label>
+					<div class="form-group">
+						<label for="incident-description" class="form-label">Descripcion Detallada *</label>
 						<textarea
 							id="incident-description"
 							bind:value={incidentForm.description}
 							placeholder="Describe el problema con tanto detalle como sea posible..."
 							rows="4"
-							class="w-full px-4 py-2 bg-panel-soft border bd-soft radius-lg txt-primary placeholder-slate-500 focus:outline-none focus:border-blue-500 transition-colors resize-none"
+							class="form-input form-textarea"
 						></textarea>
-						<p class="text-xs txt-muted mt-1">Campo requerido</p>
+						<p class="field-note">Campo requerido</p>
 					</div>
 				</div>
 
-				<!-- Footer -->
-				<div class="border-t bd-mid p-6 flex gap-3 justify-end">
-					<Button
-						variant="secondary"
-						size="sm"
-						onclick={closeIncidentModal}
-						disabled={incidentSubmitting}
-					>
+				<div class="modal-footer">
+					<Button variant="secondary" size="sm" onclick={closeIncidentModal} disabled={incidentSubmitting}>
 						Cancelar
 					</Button>
 					<Button
@@ -431,32 +378,445 @@
 		</div>
 	{/if}
 
-	<!-- Toast/Banner de notificaciones -->
 	{#if showToast}
-		<div class="fixed top-4 right-4 z-50 animate-slideInRight">
-			<div
-				class={`radius-lg shadow-lg border px-6 py-4 flex items-center gap-3 backdrop-blur-sm ${
-					toastType === 'success'
-						? 'bg-emerald-900/30 border-emerald-600 text-emerald-200'
-						: toastType === 'error'
-							? 'bg-red-900/30 border-red-600 text-red-200'
-							: 'bg-blue-900/30 border-blue-600 text-blue-200'
-				}`}
-			>
+		<div class="toast-wrap animate-slideInRight">
+			<div class={`toast-box ${toastType}`}>
 				{#if toastType === 'success'}
-					<span class="fs-2xl">✓</span>
+					<span class="toast-icon">✓</span>
 				{:else if toastType === 'error'}
-					<span class="fs-2xl">✕</span>
+					<span class="toast-icon">✕</span>
 				{:else}
-					<span class="fs-2xl">ℹ</span>
+					<span class="toast-icon">i</span>
 				{/if}
-				<p class="fw-medium">{toastMessage}</p>
+				<p class="toast-message">{toastMessage}</p>
 			</div>
 		</div>
 	{/if}
 </div>
 
 <style>
+	.page-root {
+		width: 100%;
+		padding: 1.5rem;
+		background: #0f172a;
+		color: #cbd5e1;
+	}
+
+	.page-header {
+		margin-bottom: 1.5rem;
+	}
+
+	.page-title {
+		margin: 0;
+		font-size: 2rem;
+		font-weight: 700;
+		color: #f1f5f9;
+	}
+
+	.page-subtitle {
+		margin: 0.5rem 0 0;
+		font-size: 0.95rem;
+		color: #94a3b8;
+	}
+
+	.card-section {
+		background: #1e293b;
+		border: 1px solid #334155;
+		border-radius: 0.5rem;
+		padding: 1.25rem;
+		margin-bottom: 1.25rem;
+	}
+
+	.delivery-panel-grid {
+		display: grid;
+		grid-template-columns: repeat(1, minmax(0, 1fr));
+		gap: 1rem;
+	}
+
+	.delivery-panel-block {
+		background: #0f172a;
+		border: 1px solid #334155;
+		border-radius: 0.5rem;
+		padding: 1rem;
+	}
+
+	.panel-title {
+		margin: 0 0 1rem;
+		font-size: 1.05rem;
+		font-weight: 700;
+		color: #f1f5f9;
+	}
+
+	.panel-info-list {
+		display: grid;
+		gap: 0.85rem;
+	}
+
+	.item-label {
+		margin: 0;
+		font-size: 0.8rem;
+		color: #94a3b8;
+	}
+
+	.item-value {
+		margin: 0.35rem 0 0;
+		font-size: 0.95rem;
+		color: #cbd5e1;
+	}
+
+	.item-value-blue {
+		color: #60a5fa;
+		font-weight: 600;
+	}
+
+	.item-value-strong {
+		color: #f1f5f9;
+		font-weight: 600;
+	}
+
+	.stats-grid {
+		display: grid;
+		grid-template-columns: repeat(1, minmax(0, 1fr));
+		gap: 1rem;
+		margin: 1.25rem 0;
+	}
+
+	.stats-grid-3 {
+		grid-template-columns: repeat(1, minmax(0, 1fr));
+	}
+
+	.stat-card {
+		border-radius: 0.5rem;
+		padding: 1px;
+	}
+
+	.stat-card .stat-content {
+		background: #1e293b;
+		border: 1px solid #334155;
+		border-radius: 0.5rem;
+		padding: 1rem;
+		text-align: center;
+	}
+
+	.stat-card.blue {
+		background: linear-gradient(135deg, rgba(59, 130, 246, 0.2), rgba(15, 23, 42, 0.2));
+	}
+
+	.stat-card.amber {
+		background: linear-gradient(135deg, rgba(245, 158, 11, 0.2), rgba(15, 23, 42, 0.2));
+	}
+
+	.stat-card.emerald {
+		background: linear-gradient(135deg, rgba(16, 185, 129, 0.2), rgba(15, 23, 42, 0.2));
+	}
+
+	.stat-value {
+		font-size: 2rem;
+		font-weight: 700;
+		color: #f1f5f9;
+		line-height: 1;
+	}
+
+	.stat-label {
+		margin: 0.65rem 0 0;
+		font-size: 0.95rem;
+		font-weight: 600;
+		color: #cbd5e1;
+	}
+
+	.stat-meta {
+		margin: 0.35rem 0 0;
+		font-size: 0.85rem;
+		color: #94a3b8;
+	}
+
+	.action-bar {
+		display: flex;
+		justify-content: center;
+		margin: 1rem 0 1.5rem;
+	}
+
+	.primary-link-btn {
+		display: inline-block;
+		padding: 0.7rem 1.1rem;
+		border-radius: 0.45rem;
+		background: #2563eb;
+		border: 1px solid #3b82f6;
+		color: #eff6ff;
+		font-weight: 600;
+		text-decoration: none;
+		transition: all 0.2s ease;
+	}
+
+	.primary-link-btn:hover {
+		background: #1d4ed8;
+	}
+
+	.orders-list,
+	.delivered-list {
+		display: grid;
+		gap: 0.85rem;
+	}
+
+	.order-card,
+	.delivered-card {
+		background: #0f172a;
+		border: 1px solid #334155;
+		border-radius: 0.5rem;
+		padding: 1rem;
+	}
+
+	.order-header,
+	.order-summary-row,
+	.delivered-card {
+		display: flex;
+		justify-content: space-between;
+		align-items: flex-start;
+		gap: 0.85rem;
+	}
+
+	.order-id {
+		margin: 0;
+		font-size: 1rem;
+		font-weight: 700;
+		color: #f1f5f9;
+	}
+
+	.order-id-compact {
+		font-size: 0.95rem;
+	}
+
+	.order-date {
+		margin: 0.25rem 0 0;
+		font-size: 0.85rem;
+		color: #94a3b8;
+	}
+
+	.order-items-box {
+		margin: 0.85rem 0;
+		padding: 0.85rem;
+		background: #1e293b;
+		border: 1px solid #334155;
+		border-radius: 0.4rem;
+	}
+
+	.order-items-title {
+		margin: 0 0 0.5rem;
+		font-size: 0.85rem;
+		font-weight: 600;
+		color: #cbd5e1;
+	}
+
+	.order-items-list {
+		display: grid;
+		gap: 0.3rem;
+		font-size: 0.85rem;
+		color: #cbd5e1;
+	}
+
+	.order-summary-row {
+		padding-top: 0.85rem;
+		border-top: 1px solid #334155;
+		margin-bottom: 0.85rem;
+	}
+
+	.summary-label {
+		margin: 0;
+		font-size: 0.8rem;
+		color: #94a3b8;
+	}
+
+	.summary-value {
+		margin: 0.3rem 0 0;
+		font-size: 0.9rem;
+		font-weight: 600;
+		color: #f1f5f9;
+	}
+
+	.summary-total-box {
+		text-align: right;
+	}
+
+	.summary-total {
+		margin: 0.3rem 0 0;
+		font-size: 1.1rem;
+		font-weight: 700;
+		color: #60a5fa;
+	}
+
+	.delivered-actions {
+		display: flex;
+		gap: 0.75rem;
+		align-items: center;
+	}
+
+	.list-more-note {
+		text-align: center;
+		margin: 0;
+		font-size: 0.85rem;
+		color: #94a3b8;
+	}
+
+	.empty-state {
+		padding: 1.5rem;
+		text-align: center;
+	}
+
+	.empty-text {
+		margin: 0 0 1rem;
+		font-size: 1rem;
+		color: #94a3b8;
+	}
+
+	.title-amber {
+		color: #fcd34d !important;
+	}
+
+	.title-emerald {
+		color: #86efac !important;
+	}
+
+	.modal-overlay {
+		position: fixed;
+		inset: 0;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		padding: 1rem;
+		background: rgba(2, 6, 23, 0.72);
+		backdrop-filter: blur(3px);
+		z-index: 50;
+	}
+
+	.modal-card {
+		width: 100%;
+		max-width: 34rem;
+		background: #1e293b;
+		border: 1px solid #334155;
+		border-radius: 0.65rem;
+		overflow: hidden;
+	}
+
+	.modal-header,
+	.modal-form,
+	.modal-footer {
+		padding: 1rem;
+	}
+
+	.modal-header {
+		border-bottom: 1px solid #334155;
+	}
+
+	.modal-title {
+		margin: 0;
+		font-size: 1.1rem;
+		font-weight: 700;
+		color: #f1f5f9;
+	}
+
+	.modal-subtitle {
+		margin: 0.35rem 0 0;
+		font-size: 0.85rem;
+		color: #94a3b8;
+	}
+
+	.modal-form {
+		display: grid;
+		gap: 0.85rem;
+	}
+
+	.form-group {
+		display: grid;
+		gap: 0.4rem;
+	}
+
+	.form-label {
+		font-size: 0.85rem;
+		font-weight: 600;
+		color: #cbd5e1;
+	}
+
+	.form-input {
+		width: 100%;
+		padding: 0.6rem 0.7rem;
+		background: #0f172a;
+		border: 1px solid #334155;
+		border-radius: 0.4rem;
+		font: inherit;
+		color: #f1f5f9;
+		transition: border-color 0.2s ease;
+	}
+
+	.form-input:focus {
+		outline: none;
+		border-color: #3b82f6;
+	}
+
+	.form-textarea {
+		resize: none;
+	}
+
+	.field-note {
+		margin: 0;
+		font-size: 0.75rem;
+		color: #94a3b8;
+	}
+
+	.modal-footer {
+		border-top: 1px solid #334155;
+		display: flex;
+		justify-content: flex-end;
+		gap: 0.6rem;
+	}
+
+	.toast-wrap {
+		position: fixed;
+		top: 1rem;
+		right: 1rem;
+		z-index: 60;
+	}
+
+	.toast-box {
+		display: flex;
+		align-items: center;
+		gap: 0.65rem;
+		padding: 0.75rem 0.9rem;
+		border-radius: 0.5rem;
+		border: 1px solid;
+		background: #0f172a;
+		backdrop-filter: blur(4px);
+	}
+
+	.toast-box.success {
+		border-color: #10b981;
+		color: #a7f3d0;
+	}
+
+	.toast-box.error {
+		border-color: #ef4444;
+		color: #fecaca;
+	}
+
+	.toast-box.info {
+		border-color: #3b82f6;
+		color: #bfdbfe;
+	}
+
+	.toast-icon {
+		font-size: 1.1rem;
+		font-weight: 700;
+	}
+
+	.toast-message {
+		margin: 0;
+		font-size: 0.85rem;
+		font-weight: 600;
+	}
+
+	.full-width-desktop {
+		width: 100%;
+	}
+
 	@keyframes fadeIn {
 		from {
 			opacity: 0;
@@ -471,7 +831,7 @@
 	@keyframes slideInRight {
 		from {
 			opacity: 0;
-			transform: translateX(400px);
+			transform: translateX(280px);
 		}
 		to {
 			opacity: 1;
@@ -480,10 +840,46 @@
 	}
 
 	.animate-fadeIn {
-		animation: fadeIn 0.5s ease-in-out;
+		animation: fadeIn 0.35s ease-out;
 	}
 
 	.animate-slideInRight {
-		animation: slideInRight 0.3s ease-out;
+		animation: slideInRight 0.25s ease-out;
+	}
+
+	@media (min-width: 768px) {
+		.delivery-panel-grid {
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+		}
+
+		.stats-grid-3 {
+			grid-template-columns: repeat(3, minmax(0, 1fr));
+		}
+	}
+
+	@media (max-width: 640px) {
+		.page-root {
+			padding: 1rem;
+		}
+
+		.page-title {
+			font-size: 1.55rem;
+		}
+
+		.order-header,
+		.order-summary-row,
+		.delivered-card,
+		.delivered-actions {
+			flex-direction: column;
+		}
+
+		.summary-total-box {
+			text-align: left;
+		}
+
+		.toast-wrap {
+			left: 1rem;
+			right: 1rem;
+		}
 	}
 </style>

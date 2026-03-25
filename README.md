@@ -180,7 +180,7 @@ Para convertir en PWA instalable:
 
 - [SvelteKit](https://kit.svelte.dev/)
 - [Svelte Stores](https://svelte.dev/docs/svelte-stores)
-- [Tailwind CSS](https://tailwindcss.com/)
+- [CSS Guides (MDN)](https://developer.mozilla.org/en-US/docs/Web/CSS)
 - [PWA Docs](https://web.dev/progressive-web-apps/)
 
 ---
