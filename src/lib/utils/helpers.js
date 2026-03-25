@@ -137,7 +137,7 @@ export function getStatusLabel(status) {
 		delivered: 'Entregado',
 		cancelled: 'Cancelado',
 		open: 'Abierto',
-		'in_progress': 'En proceso',
+		in_progress: 'En proceso',
 		in_delivery: 'En reparto',
 		resolved: 'Resuelto',
 		active: 'Activo',

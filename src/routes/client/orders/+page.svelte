@@ -12,16 +12,26 @@
 	import Button from '$lib/components/Button.svelte';
 	import { resolve } from '$app/paths';
 	import { authStore } from '$lib/stores/authStore.js';
-	import { ordersStore, incidentsStore } from '$lib/stores/dataStore.js';
+	import {
+		ordersStore,
+		incidentsStore,
+		clientsStore,
+		zonesStore,
+		productsStore
+	} from '$lib/stores/dataStore.js';
 	import { formatCurrency, formatDate, daysUntil } from '$lib/utils/helpers.js';
-	import { zones } from '$lib/data/mockData.js';
 
 	let currentUser;
+	let allClients = $state([]);
+	let allZones = $state([]);
+	let allProducts = $state([]);
 	let clientOrders = $state([]);
 	let pendingOrders = $state([]);
 	let deliveredOrders = $state([]);
 	let nextDeliveryZone = $state(null);
 	let showIncidentModal = $state(false);
+	let showCancelConfirm = $state(false);
+	let selectedCancelOrderId = $state(null);
 	let selectedOrderId = $state(null);
 	let incidentForm = $state({
 		type: 'damaged',
@@ -36,19 +46,46 @@
 	// Se suscribe a autenticación
 	authStore.subscribe((user) => {
 		currentUser = user;
-		if (user?.zone) {
-			nextDeliveryZone = zones.find((z) => z.id === user.zone);
-		}
+		refreshNextDeliveryZone();
+	});
+
+	clientsStore.subscribe(($clients) => {
+		allClients = $clients;
+		refreshNextDeliveryZone();
+	});
+
+	zonesStore.subscribe(($zones) => {
+		allZones = $zones;
+		refreshNextDeliveryZone();
+	});
+
+	productsStore.subscribe(($products) => {
+		allProducts = $products;
 	});
 
 	// Se suscribe a órdenes
 	ordersStore.subscribe(($orders) => {
 		if (currentUser?.id) {
 			clientOrders = $orders.filter((o) => o.clientId === currentUser.id);
-			pendingOrders = clientOrders.filter((o) => o.status === 'pending');
+			pendingOrders = clientOrders.filter((o) => o.status === 'pending' || o.status === 'in_delivery');
 			deliveredOrders = clientOrders.filter((o) => o.status === 'delivered');
+		} else {
+			clientOrders = [];
+			pendingOrders = [];
+			deliveredOrders = [];
 		}
 	});
+
+	function refreshNextDeliveryZone() {
+		if (!currentUser?.id) {
+			nextDeliveryZone = null;
+			return;
+		}
+
+		const liveClient = allClients.find((client) => Number(client.id) === Number(currentUser.id));
+		const zoneId = liveClient?.zone ?? currentUser?.zone;
+		nextDeliveryZone = allZones.find((zone) => Number(zone.id) === Number(zoneId)) || null;
+	}
 
 	/**
 	 * Calcula el total de pedidos pendientes
@@ -77,6 +114,48 @@
 		showIncidentModal = false;
 		selectedOrderId = null;
 		incidentForm = { type: 'damaged', priority: 'medium', description: '' };
+	}
+
+	function canRequestCancellation(order) {
+		if (!order) return false;
+		if (order.status === 'delivered' || order.status === 'cancelled') return false;
+		return !order.cancelRequestStatus;
+	}
+
+	function openCancelRequest(orderId) {
+		selectedCancelOrderId = orderId;
+		showCancelConfirm = true;
+	}
+
+	function closeCancelRequest() {
+		showCancelConfirm = false;
+		selectedCancelOrderId = null;
+	}
+
+	function confirmCancelRequest() {
+		if (!selectedCancelOrderId || !currentUser?.id) {
+			return;
+		}
+
+		ordersStore.requestCancellation(selectedCancelOrderId, currentUser.id);
+		showToastMessage('Solicitud de anulación enviada al administrador.', 'info');
+		closeCancelRequest();
+	}
+
+	function getCancelRequestMessage(order) {
+		if (order.cancelRequestStatus === 'pending') {
+			return 'Solicitud de anulación enviada. Pendiente de revisión por administración.';
+		}
+
+		if (order.cancelRequestStatus === 'rejected') {
+			return 'Imposible anular: administración denegó la solicitud de anulación.';
+		}
+
+		if (order.status === 'cancelled' && order.cancelSource === 'client') {
+			return 'Pedido cancelado por cliente (confirmado por administración).';
+		}
+
+		return '';
 	}
 
 	/**
@@ -148,6 +227,11 @@
 	 */
 	function countItems(items) {
 		return items.reduce((sum, item) => sum + item.quantity, 0);
+	}
+
+	function getProductName(productId) {
+		const product = allProducts.find((item) => Number(item.id) === Number(productId));
+		return product?.name || `Producto #${productId}`;
 	}
 </script>
 
@@ -236,7 +320,7 @@
 	</div>
 
 	{#if pendingOrders.length > 0}
-		<Card title="⏳ Pedidos Pendientes" titleClass="title-amber" class="card-section">
+		<Card title="⏳ Pedidos Activos" titleClass="title-amber" class="card-section">
 			<div class="orders-list">
 				{#each pendingOrders as order (order.id)}
 					<div class="order-card">
@@ -252,7 +336,10 @@
 							<p class="order-items-title">Items ({countItems(order.items)})</p>
 							<div class="order-items-list">
 								{#each order.items as item (item.productId)}
-									<p>• {item.quantity}x unidades - {formatCurrency(item.unitPrice * item.quantity)}</p>
+									<p>
+										• {getProductName(item.productId)}: {item.quantity} uds pedidas -
+										{formatCurrency(item.unitPrice * item.quantity)}
+									</p>
 								{/each}
 							</div>
 						</div>
@@ -268,9 +355,26 @@
 							</div>
 						</div>
 
-						<Button variant="danger" size="sm" onclick={() => openIncidentModal(order.id)}>
-							⚠️ Reportar Problema
-						</Button>
+						{#if getCancelRequestMessage(order)}
+							<p
+								class="cancel-request-note"
+								class:pending={order.cancelRequestStatus === 'pending'}
+								class:rejected={order.cancelRequestStatus === 'rejected'}
+							>
+								{getCancelRequestMessage(order)}
+							</p>
+						{/if}
+
+						<div class="pending-actions">
+							<Button variant="danger" size="sm" onclick={() => openIncidentModal(order.id)}>
+								⚠️ Reportar Problema
+							</Button>
+							{#if canRequestCancellation(order)}
+								<Button variant="secondary" size="sm" onclick={() => openCancelRequest(order.id)}>
+									Solicitar anulación
+								</Button>
+							{/if}
+						</div>
 					</div>
 				{/each}
 			</div>
@@ -287,6 +391,14 @@
 							<p class="order-date">
 								{countItems(order.items)} items • {formatDate(order.deliveredAt || order.createdAt)}
 							</p>
+							<div class="order-items-list delivered-items-list">
+								{#each order.items as item (item.productId)}
+									<p>
+										• {getProductName(item.productId)}: {item.quantity} uds pedidas -
+										{formatCurrency(item.unitPrice * item.quantity)}
+									</p>
+								{/each}
+							</div>
 						</div>
 						<div class="delivered-actions">
 							<div class="summary-total-box">
@@ -303,6 +415,32 @@
 				{#if deliveredOrders.length > 5}
 					<p class="list-more-note">...y {deliveredOrders.length - 5} mas</p>
 				{/if}
+			</div>
+		</Card>
+	{/if}
+
+	{#if clientOrders.filter((order) => order.status === 'cancelled').length > 0}
+		<Card title="🚫 Pedidos Cancelados" titleClass="title-red" class="card-section">
+			<div class="delivered-list">
+				{#each clientOrders.filter((order) => order.status === 'cancelled') as order (order.id)}
+					<div class="delivered-card">
+						<div>
+							<p class="order-id order-id-compact">Pedido #{order.id}</p>
+							<p class="order-date">{formatDate(order.cancelDecisionAt || order.createdAt)}</p>
+							<p class="cancel-request-note">
+								{order.cancelSource === 'client'
+									? 'Cancelado por cliente (aprobado por administración).'
+									: 'Cancelado por administración.'}
+							</p>
+						</div>
+						<div class="delivered-actions">
+							<div class="summary-total-box">
+								<p class="summary-value">{formatCurrency(order.totalAmount)}</p>
+								<Badge status={order.status} />
+							</div>
+						</div>
+					</div>
+				{/each}
 			</div>
 		</Card>
 	{/if}
@@ -373,6 +511,23 @@
 							Reportar Problema
 						{/if}
 					</Button>
+				</div>
+			</div>
+		</div>
+	{/if}
+
+	{#if showCancelConfirm}
+		<div class="modal-overlay" role="dialog" aria-modal="true">
+			<div class="modal-card animate-fadeIn">
+				<div class="modal-header">
+					<h3 class="modal-title">Solicitar anulación de pedido</h3>
+					<p class="modal-subtitle">
+						Tu solicitud será revisada por administración. Mientras tanto, el pedido seguirá activo.
+					</p>
+				</div>
+				<div class="modal-footer">
+					<Button variant="secondary" size="sm" onclick={closeCancelRequest}>Cancelar</Button>
+					<Button variant="primary" size="sm" onclick={confirmCancelRequest}>Enviar solicitud</Button>
 				</div>
 			</div>
 		</div>
@@ -674,6 +829,38 @@
 
 	.title-emerald {
 		color: #86efac !important;
+	}
+
+	.title-red {
+		color: #fca5a5 !important;
+	}
+
+	.pending-actions {
+		display: flex;
+		gap: 0.6rem;
+		flex-wrap: wrap;
+	}
+
+	.cancel-request-note {
+		margin: 0 0 0.85rem;
+		padding: 0.6rem 0.75rem;
+		border-radius: 0.4rem;
+		font-size: 0.82rem;
+		background: rgba(59, 130, 246, 0.12);
+		border: 1px solid rgba(59, 130, 246, 0.35);
+		color: #bfdbfe;
+	}
+
+	.cancel-request-note.pending {
+		background: rgba(245, 158, 11, 0.12);
+		border-color: rgba(245, 158, 11, 0.35);
+		color: #fde68a;
+	}
+
+	.cancel-request-note.rejected {
+		background: rgba(239, 68, 68, 0.12);
+		border-color: rgba(239, 68, 68, 0.35);
+		color: #fecaca;
 	}
 
 	.modal-overlay {

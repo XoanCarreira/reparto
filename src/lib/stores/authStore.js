@@ -6,6 +6,7 @@
 
 import { writable } from 'svelte/store';
 import { users } from '../data/mockData.js';
+import { deliveryStaffStore, clientsStore } from './dataStore.js';
 
 /**
  * Crea un store reactivo de Svelte para la sesión del usuario actual
@@ -18,7 +19,7 @@ function createAuthStore() {
 	const initialValue = storedSession ? JSON.parse(storedSession) : null;
 
 	// Crea el store reactivo con el valor inicial
-	const { subscribe, set, update } = writable(initialValue);
+	const { subscribe, set } = writable(initialValue);
 
 	return {
 		subscribe,
@@ -30,8 +31,54 @@ function createAuthStore() {
 		 * @returns {object} - { success: boolean, error?: string, user?: object }
 		 */
 		login: (email, password) => {
-			// Busca el usuario en los datos mock
-			const user = users.find((u) => u.email === email && u.password === password);
+			const normalizedEmail = String(email || '').trim().toLowerCase();
+			const normalizedPassword = String(password || '');
+
+			// Busca primero en usuarios del sistema (admin/client y repartidores legacy)
+			let user = users.find(
+				(u) =>
+					String(u.email || '').trim().toLowerCase() === normalizedEmail &&
+					String(u.password || '') === normalizedPassword
+			);
+
+			if (!user) {
+				// Si no existe en users, permite autenticación de repartidores del store operativo.
+				const deliveryUser = deliveryStaffStore.getAll().find(
+					(staff) =>
+						String(staff.email || '').trim().toLowerCase() === normalizedEmail &&
+						String(staff.password || '') === normalizedPassword
+				);
+
+				if (deliveryUser) {
+					user = {
+						id: deliveryUser.id,
+						email: deliveryUser.email,
+						name: deliveryUser.name,
+						role: 'delivery',
+						zone: deliveryUser.zoneId,
+						deliveryStaffId: deliveryUser.id
+					};
+				}
+			}
+
+			if (!user) {
+				// Si no existe en repartidores, permite autenticación de clientes creados dinámicamente.
+				const clientUser = clientsStore.getAll().find(
+					(client) =>
+						String(client.email || '').trim().toLowerCase() === normalizedEmail &&
+						String(client.password || '') === normalizedPassword
+				);
+
+				if (clientUser) {
+					user = {
+						id: clientUser.id,
+						email: clientUser.email,
+						name: clientUser.name,
+						role: 'client',
+						zone: clientUser.zone
+					};
+				}
+			}
 
 			if (!user) {
 				return { success: false, error: 'Email o contraseña incorrectos' };
@@ -44,6 +91,7 @@ function createAuthStore() {
 				name: user.name,
 				role: user.role,
 				zone: user.zone,
+				deliveryStaffId: user.role === 'delivery' ? user.deliveryStaffId ?? user.id : null,
 				loginAt: new Date()
 			};
 

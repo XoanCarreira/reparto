@@ -9,22 +9,29 @@
 	import Badge from '$lib/components/Badge.svelte';
 	import { resolve } from '$app/paths';
 	import { authStore } from '$lib/stores/authStore.js';
-	import { ordersStore } from '$lib/stores/dataStore.js';
+	import { ordersStore, clientsStore, zonesStore } from '$lib/stores/dataStore.js';
 	import { formatCurrency, formatDate } from '$lib/utils/helpers.js';
-	import { zones } from '$lib/data/mockData.js';
 
 	let currentUser = $state(null);
+	let allClients = $state([]);
+	let allZones = $state([]);
 	let userOrders = $state([]);
 	let userZone = $state(null);
 
 	// Se suscribe a autenticación
 	authStore.subscribe((user) => {
 		currentUser = user;
-		if (user?.zone) {
-			userZone = zones.find((z) => z.id === user.zone);
-		} else {
-			userZone = null;
-		}
+		refreshUserZone();
+	});
+
+	clientsStore.subscribe(($clients) => {
+		allClients = $clients;
+		refreshUserZone();
+	});
+
+	zonesStore.subscribe(($zones) => {
+		allZones = $zones;
+		refreshUserZone();
 	});
 
 	// Se suscribe a órdenes
@@ -35,6 +42,17 @@
 			userOrders = [];
 		}
 	});
+
+	function refreshUserZone() {
+		if (!currentUser?.id) {
+			userZone = null;
+			return;
+		}
+
+		const liveClient = allClients.find((client) => Number(client.id) === Number(currentUser.id));
+		const zoneId = liveClient?.zone ?? currentUser?.zone;
+		userZone = allZones.find((zone) => Number(zone.id) === Number(zoneId)) || null;
+	}
 
 	/**
 	 * Calcula el total gastado

@@ -21,21 +21,22 @@ function getAverageOrderAmountByMonth(clientOrders, year, month) {
 	return Number((totalAmount / monthOrders.length).toFixed(2));
 }
 
-function buildZoneClientMetricsRows() {
+function buildZoneClientMetricsRows(allClients = null) {
 	const now = new Date();
 	const currentYear = now.getFullYear();
 	const currentMonth = now.getMonth();
 	const previousMonthDate = new Date(currentYear, currentMonth - 1, 1);
 
-	return users
-		.filter((user) => user.role === 'client')
+	const clientsToProcess = allClients || users.filter((user) => user.role === 'client');
+
+	return clientsToProcess
 		.map((client) => {
 			const clientOrders = orders.filter((order) => order.clientId === client.id);
 
 			return {
 				id: `metric-${client.id}`,
 				clientId: client.id,
-				zoneId: client.zone || zones[0]?.id || 1,
+				zoneId: Number(client.zone) || 1,
 				pendingOrders: clientOrders.filter((order) => order.status === 'pending').length,
 				inDeliveryOrders: clientOrders.filter((order) => order.status === 'in_delivery').length,
 				avgPrevMonth: getAverageOrderAmountByMonth(
@@ -337,6 +338,25 @@ function createZonesStore() {
 }
 
 function createClientsStore() {
+	function normalizeGpsCoordinate(value, type) {
+		if (value === '' || value === null || value === undefined) {
+			return null;
+		}
+
+		const parsed = Number.parseFloat(value);
+		if (Number.isNaN(parsed)) {
+			return null;
+		}
+
+		const min = type === 'lat' ? -90 : -180;
+		const max = type === 'lat' ? 90 : 180;
+		if (parsed < min || parsed > max) {
+			return null;
+		}
+
+		return Number(parsed.toFixed(6));
+	}
+
 	const initialClients = users
 		.filter((user) => user.role === 'client')
 		.map((client) => ({ ...client }));
@@ -345,6 +365,18 @@ function createClientsStore() {
 
 	return {
 		subscribe,
+
+		/**
+		 * Obtiene todos los clientes
+		 * @returns {array}
+		 */
+		getAll: () => {
+			let allClients = [];
+			subscribe((clients) => {
+				allClients = clients;
+			})();
+			return allClients;
+		},
 
 		create: (payload) => {
 			let newClientId = 0;
@@ -362,6 +394,8 @@ function createClientsStore() {
 					zone: Number(payload.zone) || zones[0]?.id || 1,
 					phone: payload.phone?.trim() || '',
 					address: payload.address?.trim() || '',
+					gpsLat: normalizeGpsCoordinate(payload.gpsLat, 'lat'),
+					gpsLng: normalizeGpsCoordinate(payload.gpsLng, 'lng'),
 					createdAt: new Date()
 				};
 
@@ -387,7 +421,15 @@ function createClientsStore() {
 						zone: Number.isFinite(Number(updates.zone)) ? Number(updates.zone) : client.zone,
 						phone: typeof updates.phone === 'string' ? updates.phone.trim() : (client.phone ?? ''),
 						address:
-							typeof updates.address === 'string' ? updates.address.trim() : (client.address ?? '')
+							typeof updates.address === 'string' ? updates.address.trim() : (client.address ?? ''),
+						gpsLat:
+							updates.gpsLat !== undefined
+								? normalizeGpsCoordinate(updates.gpsLat, 'lat')
+								: (client.gpsLat ?? null),
+						gpsLng:
+							updates.gpsLng !== undefined
+								? normalizeGpsCoordinate(updates.gpsLng, 'lng')
+								: (client.gpsLng ?? null)
 					};
 				})
 			);
@@ -488,7 +530,11 @@ function createOrdersStore() {
 					createdAt: new Date(),
 					scheduledDelivery,
 					totalAmount,
-					notes
+					notes,
+					cancelRequestStatus: null, // null | pending | approved | rejected
+					cancelRequestedAt: null,
+					cancelDecisionAt: null,
+					cancelSource: null // null | client | admin
 				};
 
 				return [...orders, newOrder];
@@ -515,7 +561,8 @@ function createOrdersStore() {
 					return {
 						...o,
 						status: newStatus,
-						deliveredAt: newStatus === 'delivered' ? new Date() : o.deliveredAt
+						deliveredAt: newStatus === 'delivered' ? new Date() : o.deliveredAt,
+						cancelSource: newStatus === 'cancelled' ? (o.cancelSource || 'admin') : o.cancelSource
 					};
 				})
 			);
@@ -554,6 +601,68 @@ function createOrdersStore() {
 						? { ...o, deliveryNote: String(note || '').trim(), deliveryNoteAt: new Date() }
 						: o
 				)
+			);
+		},
+
+		/**
+		 * Solicita la anulación de un pedido por parte del cliente.
+		 * Solo aplica a pedidos no entregados ni cancelados.
+		 * @param {number} orderId - ID del pedido
+		 * @param {number} clientId - ID del cliente solicitante
+		 */
+		requestCancellation: (orderId, clientId) => {
+			update((orders) =>
+				orders.map((order) => {
+					if (order.id !== orderId || order.clientId !== clientId) {
+						return order;
+					}
+
+					if (order.status === 'delivered' || order.status === 'cancelled') {
+						return order;
+					}
+
+					if (order.cancelRequestStatus === 'pending' || order.cancelRequestStatus === 'rejected') {
+						return order;
+					}
+
+					return {
+						...order,
+						cancelRequestStatus: 'pending',
+						cancelRequestedAt: new Date(),
+						cancelDecisionAt: null
+					};
+				})
+			);
+		},
+
+		/**
+		 * Resuelve una solicitud de anulación (admin): aprobada o denegada.
+		 * @param {number} orderId - ID del pedido
+		 * @param {boolean} approved - true para aprobar, false para denegar
+		 */
+		resolveCancellationRequest: (orderId, approved) => {
+			update((orders) =>
+				orders.map((order) => {
+					if (order.id !== orderId || order.cancelRequestStatus !== 'pending') {
+						return order;
+					}
+
+					if (approved) {
+						return {
+							...order,
+							status: 'cancelled',
+							cancelSource: 'client',
+							cancelRequestStatus: 'approved',
+							cancelDecisionAt: new Date()
+						};
+					}
+
+					return {
+						...order,
+						cancelRequestStatus: 'rejected',
+						cancelDecisionAt: new Date()
+					};
+				})
 			);
 		},
 
@@ -677,6 +786,14 @@ function createZoneClientMetricsStore() {
 	return {
 		subscribe,
 
+		/**
+		 * Recalcula las métricas con un array de clientes actualizado
+		 * @param {array} allClients - Array de clientes actual
+		 */
+		rebuildWithClients: (allClients) => {
+			set(buildZoneClientMetricsRows(allClients));
+		},
+
 		addRow: (payload = {}) => {
 			update((rows) => {
 				const baseClient = users.find((user) => user.role === 'client');
@@ -724,6 +841,17 @@ function createZoneClientMetricsStore() {
 
 		resetFromOrders: () => {
 			set(buildZoneClientMetricsRows());
+		},
+
+		/**
+		 * Retorna las filas actuales de métricas
+		 */
+		getAll: () => {
+			let rows = [];
+			subscribe((data) => {
+				rows = data;
+			})();
+			return rows;
 		}
 	};
 }
@@ -828,6 +956,11 @@ function createDeliveryStaffStore() {
 						...member,
 						...updates,
 						name: typeof updates.name === 'string' ? updates.name.trim() : member.name,
+						email: typeof updates.email === 'string' ? updates.email.trim() : member.email,
+						password:
+							typeof updates.password === 'string' && updates.password.trim().length > 0
+								? updates.password.trim()
+								: member.password,
 						phone: typeof updates.phone === 'string' ? updates.phone.trim() : member.phone,
 						vehicle: typeof updates.vehicle === 'string' ? updates.vehicle.trim() : member.vehicle,
 						status: typeof updates.status === 'string' ? updates.status : member.status,
@@ -856,6 +989,8 @@ function createDeliveryStaffStore() {
 					id: newStaffId,
 					name: payload.name?.trim() || `Repartidor ${newStaffId}`,
 					zoneId: payload.zoneId === null || payload.zoneId === '' ? null : Number(payload.zoneId),
+					email: payload.email?.trim() || `repartidor${newStaffId}@empresa.com`,
+					password: payload.password?.trim() || `repartidor${newStaffId}`,
 					phone: payload.phone?.trim() || '',
 					vehicle: payload.vehicle?.trim() || 'Vehiculo sin definir',
 					status: payload.status?.trim() || 'active'

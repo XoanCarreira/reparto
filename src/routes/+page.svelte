@@ -81,8 +81,8 @@
 			email = 'admin@empresa.com';
 			password = 'admin123';
 		} else if (role === 'delivery') {
-			email = 'repartidor1@empresa.com';
-			password = 'repartidor123';
+			email = 'repartidor201@empresa.com';
+			password = 'repartidor201';
 		} else {
 			email = 'cliente1@empresa.com';
 			password = 'cliente123';
@@ -181,7 +181,7 @@
 						onclick={() => fillTestCredentials('delivery')}
 						class="test-credential-btn test-credential-btn-delivery"
 					>
-						🚚 Repartidor: repartidor1@empresa.com
+						🚚 Repartidor: repartidor201@empresa.com
 					</button>
 
 					<button
@@ -194,7 +194,7 @@
 				</div>
 
 				<p class="test-credentials-note">
-					Admin: admin123 • Repartidor: repartidor123 • Cliente: cliente123
+					Admin: admin123 • Repartidor: repartidor201 • Cliente: cliente123
 				</p>
 			</div>
 		</div>

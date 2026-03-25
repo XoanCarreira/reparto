@@ -15,24 +15,32 @@
 		productsStore,
 		zoneClientMetricsStore,
 		zonesStore,
-		deliveryStaffStore
+		deliveryStaffStore,
+		clientsStore
 	} from '$lib/stores/dataStore.js';
 	import { resolve } from '$app/paths';
 	import { formatCurrency } from '$lib/utils/helpers.js';
 	import { users, zones } from '$lib/data/mockData.js';
 
 	let pendingOrders = $state([]);
+	let allOrders = $state([]);
 	let lowStock = $state([]);
 	let openIssues = $state([]);
 	let zoneClientRows = $state([]);
 	let allZones = $state([]);
 	let allStaff = $state([]);
+	let allClients = $state([]);
 	let totalProducts = $state(0);
-	const totalClients = users.filter((u) => u.role === 'client').length;
-	const totalZones = zones.length;
+	let totalClients = $state(0);
+	let totalZones = $state(0);
+
+	const pendingCancellationRequests = $derived(
+		allOrders.filter((order) => order.cancelRequestStatus === 'pending').length
+	);
 
 	// Se suscribe a los stores para obtener datos en tiempo real
 	ordersStore.subscribe(($orders) => {
+		allOrders = $orders;
 		pendingOrders = $orders.filter((o) => o.status === 'pending');
 	});
 
@@ -54,10 +62,23 @@
 
 	zonesStore.subscribe(($zones) => {
 		allZones = $zones;
+		totalZones = $zones.length;
 	});
 
 	deliveryStaffStore.subscribe(($staff) => {
 		allStaff = $staff;
+	});
+
+	clientsStore.subscribe(($clients) => {
+		allClients = $clients;
+		totalClients = $clients.length;
+	});
+
+	// Efecto para recalcular métricas cuando cambien clientes, órdenes o zonas
+	$effect(() => {
+		if (pendingOrders || allClients || allZones) {
+			zoneClientMetricsStore.rebuildWithClients(allClients);
+		}
 	});
 
 	/**
@@ -71,7 +92,7 @@
 	 * Obtiene el nombre del cliente por su ID
 	 */
 	function getClientName(clientId) {
-		const client = users.find((u) => u.id === clientId);
+		const client = allClients.find((c) => c.id === clientId) || users.find((u) => u.id === clientId);
 		return client?.name || 'Cliente desconocido';
 	}
 
@@ -79,13 +100,13 @@
 	 * Obtiene el nombre de la zona por su ID
 	 */
 	function getZoneName(zoneId) {
-		const zone = zones.find((z) => z.id === zoneId);
+		const zone = allZones.find((z) => z.id === zoneId) || zones.find((z) => z.id === zoneId);
 		return zone?.name || 'Zona desconocida';
 	}
 
 	function getClientZone(clientId) {
-		const client = users.find((u) => u.id === clientId);
-		return client?.zone || zones[0]?.id || 1;
+		const client = allClients.find((c) => c.id === clientId) || users.find((u) => u.id === clientId);
+		return client?.zone || allZones[0]?.id || zones[0]?.id || 1;
 	}
 
 	function getOrderZone(order) {
@@ -106,7 +127,7 @@
 	}
 
 	const groupedRowsByZone = $derived(
-		zones.map((zone) => ({
+		allZones.map((zone) => ({
 			...zone,
 			rows: zoneClientRows.filter((row) => Number(row.zoneId) === zone.id)
 		}))
@@ -169,6 +190,17 @@
 				<p class="stat-title">Rutas sin Asignar</p>
 				<p class="stat-subtitle">
 					<a href={resolve('/admin/routes')} class="stat-link">Gestionar →</a>
+				</p>
+			</div>
+		</Card>
+
+		<!-- Tarjeta: Solicitudes de anulación pendientes -->
+		<Card class="stat-card">
+			<div class="stat-content amber">
+				<div class="stat-number">{pendingCancellationRequests}</div>
+				<p class="stat-title">Solicitudes de Anulación</p>
+				<p class="stat-subtitle">
+					<a href={resolve('/admin/orders')} class="stat-link amber-link">Revisar →</a>
 				</p>
 			</div>
 		</Card>
@@ -446,6 +478,10 @@
 		color: #f97316;
 	}
 
+	.stat-content.amber .stat-number {
+		color: #f59e0b;
+	}
+
 	.stat-link {
 		color: #f97316;
 		text-decoration: none;
@@ -456,6 +492,10 @@
 	.stat-link:hover {
 		opacity: 0.8;
 		text-decoration: underline;
+	}
+
+	.amber-link {
+		color: #f59e0b;
 	}
 
 	/* ============================================

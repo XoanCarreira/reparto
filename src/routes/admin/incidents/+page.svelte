@@ -10,12 +10,12 @@
 	import Badge from '$lib/components/Badge.svelte';
 	import Button from '$lib/components/Button.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
-	import { incidentsStore } from '$lib/stores/dataStore.js';
+	import { incidentsStore, clientsStore } from '$lib/stores/dataStore.js';
 	import { formatDate } from '$lib/utils/helpers.js';
-	import { users } from '$lib/data/mockData.js';
 
 	let statusFilter = $state('all'); // all, open, in_progress, resolved
 	let allIncidents = $state([]);
+	let allClients = $state([]);
 	let confirmResolveOpen = $state(false);
 	let pendingIncidentId = $state(null);
 	const filteredIncidents = $derived(
@@ -27,11 +27,15 @@
 		allIncidents = $incidents;
 	});
 
+	clientsStore.subscribe(($clients) => {
+		allClients = $clients;
+	});
+
 	/**
 	 * Obtiene el nombre del cliente
 	 */
 	function getClientName(clientId) {
-		const client = users.find((u) => u.id === clientId);
+		const client = allClients.find((u) => Number(u.id) === Number(clientId));
 		return client?.name || 'Desconocido';
 	}
 

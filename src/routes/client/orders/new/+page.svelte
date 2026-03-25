@@ -11,12 +11,13 @@
 	import Card from '$lib/components/Card.svelte';
 	import Button from '$lib/components/Button.svelte';
 	import { authStore } from '$lib/stores/authStore.js';
-	import { ordersStore, productsStore } from '$lib/stores/dataStore.js';
+	import { ordersStore, productsStore, clientsStore, zonesStore } from '$lib/stores/dataStore.js';
 	import { formatCurrency } from '$lib/utils/helpers.js';
-	import { zones } from '$lib/data/mockData.js';
 
 	let currentUser;
 	let allProducts = $state([]);
+	let allClients = $state([]);
+	let allZones = $state([]);
 	let cart = $state({}); // { productId: quantity }
 	let notes = $state('');
 	let isSubmitting = $state(false);
@@ -28,6 +29,14 @@
 	// Se suscribe a autenticación
 	authStore.subscribe((user) => {
 		currentUser = user;
+	});
+
+	clientsStore.subscribe(($clients) => {
+		allClients = $clients;
+	});
+
+	zonesStore.subscribe(($zones) => {
+		allZones = $zones;
 	});
 
 	// Se suscribe a productos
@@ -155,7 +164,9 @@
 	 * Obtiene información de la próxima entrega
 	 */
 	function getDeliveryInfo() {
-		const zone = zones.find((z) => z.id === currentUser?.zone);
+		const liveClient = allClients.find((client) => Number(client.id) === Number(currentUser?.id));
+		const zoneId = liveClient?.zone ?? currentUser?.zone;
+		const zone = allZones.find((z) => Number(z.id) === Number(zoneId));
 		return zone || null;
 	}
 

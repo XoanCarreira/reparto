@@ -10,7 +10,7 @@
 	import Badge from '$lib/components/Badge.svelte';
 	import Button from '$lib/components/Button.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
-	import { ordersStore, clientsStore, zonesStore } from '$lib/stores/dataStore.js';
+	import { ordersStore, clientsStore, zonesStore, productsStore } from '$lib/stores/dataStore.js';
 	import { formatCurrency, formatDate } from '$lib/utils/helpers.js';
 
 	// Filtros
@@ -20,11 +20,16 @@
 	let allOrders = $state([]);
 	let allClients = $state([]);
 	let allZones = $state([]);
+	let allProducts = $state([]);
 	let confirmOpen = $state(false);
 	let pendingOrderAction = $state({
 		type: '',
 		orderId: null
 	});
+
+	const cancellationRequests = $derived(
+		allOrders.filter((order) => order.cancelRequestStatus === 'pending')
+	);
 
 	const filteredOrders = $derived(
 		allOrders.filter((order) => {
@@ -48,6 +53,10 @@
 		allZones = $zones;
 	});
 
+	productsStore.subscribe(($products) => {
+		allProducts = $products;
+	});
+
 	/**
 	 * Obtiene el nombre del cliente
 	 */
@@ -67,6 +76,11 @@
 		return zone?.name || 'Zona desconocida';
 	}
 
+	function getProductName(productId) {
+		const product = allProducts.find((item) => Number(item.id) === Number(productId));
+		return product?.name || `Producto #${productId}`;
+	}
+
 	/**
 	 * Marca un pedido como entregado
 	 */
@@ -80,6 +94,16 @@
 	 */
 	function cancelOrder(orderId) {
 		pendingOrderAction = { type: 'cancel', orderId };
+		confirmOpen = true;
+	}
+
+	function approveCancelRequest(orderId) {
+		pendingOrderAction = { type: 'approve-cancel-request', orderId };
+		confirmOpen = true;
+	}
+
+	function denyCancelRequest(orderId) {
+		pendingOrderAction = { type: 'deny-cancel-request', orderId };
 		confirmOpen = true;
 	}
 
@@ -97,6 +121,10 @@
 			ordersStore.updateStatus(pendingOrderAction.orderId, 'delivered');
 		} else if (pendingOrderAction.type === 'cancel') {
 			ordersStore.updateStatus(pendingOrderAction.orderId, 'cancelled');
+		} else if (pendingOrderAction.type === 'approve-cancel-request') {
+			ordersStore.resolveCancellationRequest(pendingOrderAction.orderId, true);
+		} else if (pendingOrderAction.type === 'deny-cancel-request') {
+			ordersStore.resolveCancellationRequest(pendingOrderAction.orderId, false);
 		}
 
 		closeOrderConfirm();
@@ -125,6 +153,28 @@
 		<h1 class="page-title">📦 Gestión de Pedidos</h1>
 		<p class="page-subtitle">Total: {allOrders.length} pedidos registrados</p>
 	</div>
+
+	{#if cancellationRequests.length > 0}
+		<Card title="🔔 Solicitudes de Anulación" titleClass="title-amber" class="order-card">
+			<div class="orders-list">
+				{#each cancellationRequests as order (order.id)}
+					<div class="order-footer">
+						<div class="status-section">
+							<p class="status-text">Pedido #{order.id} - {getClientName(order.clientId)}</p>
+						</div>
+						<div class="actions-section">
+							<Button variant="primary" size="sm" onclick={() => approveCancelRequest(order.id)}>
+								Aceptar anulación
+							</Button>
+							<Button variant="danger" size="sm" onclick={() => denyCancelRequest(order.id)}>
+								Denegar
+							</Button>
+						</div>
+					</div>
+				{/each}
+			</div>
+		</Card>
+	{/if}
 
 	<!-- Filtros -->
 	<div class="filters-panel">
@@ -211,7 +261,8 @@
 						<div class="items-grid">
 							{#each order.items as item (item.productId)}
 								<div class="item-entry">
-									• {item.quantity} × {item.unitPrice ? formatCurrency(item.unitPrice * item.quantity) : 'N/A'}
+									• {getProductName(item.productId)}: {item.quantity} uds pedidas
+									({item.unitPrice ? formatCurrency(item.unitPrice * item.quantity) : 'N/A'})
 								</div>
 							{/each}
 						</div>
@@ -225,6 +276,11 @@
 
 						<div class="actions-section">
 							{#if order.status === 'pending'}
+								{#if order.cancelRequestStatus === 'pending'}
+									<p class="status-text cancelled">Solicitud de anulación pendiente</p>
+								{:else if order.cancelRequestStatus === 'rejected'}
+									<p class="status-text cancelled">Anulación denegada al cliente</p>
+								{/if}
 								<Button
 									variant="primary"
 									size="sm"
@@ -242,7 +298,9 @@
 							{:else if order.status === 'delivered'}
 								<p class="status-text delivered">Entregado: {formatDate(order.deliveredAt)}</p>
 							{:else}
-								<p class="status-text cancelled">Cancelado</p>
+								<p class="status-text cancelled">
+									{order.cancelSource === 'client' ? 'Cancelado por cliente' : 'Cancelado'}
+								</p>
 							{/if}
 						</div>
 					</div>
@@ -253,13 +311,29 @@
 
 	<ConfirmDialog
 		open={confirmOpen}
-		title={pendingOrderAction.type === 'deliver' ? 'Marcar Pedido como Entregado' : 'Cancelar Pedido'}
+		title={pendingOrderAction.type === 'deliver'
+			? 'Marcar Pedido como Entregado'
+			: pendingOrderAction.type === 'cancel'
+				? 'Cancelar Pedido'
+				: pendingOrderAction.type === 'approve-cancel-request'
+					? 'Aceptar Solicitud de Anulación'
+					: 'Denegar Solicitud de Anulación'}
 		message={pendingOrderAction.type === 'deliver'
 			? 'Se marcará el pedido como entregado.'
-			: 'Se cancelará el pedido. Esta acción no se puede deshacer.'}
-		confirmText={pendingOrderAction.type === 'deliver' ? 'Sí, marcar entregado' : 'Sí, cancelar pedido'}
+			: pendingOrderAction.type === 'cancel'
+				? 'Se cancelará el pedido. Esta acción no se puede deshacer.'
+				: pendingOrderAction.type === 'approve-cancel-request'
+					? 'El pedido quedará cancelado por cliente.'
+					: 'Se mantendrá el pedido activo y se notificará al cliente.'}
+		confirmText={pendingOrderAction.type === 'deliver'
+			? 'Sí, marcar entregado'
+			: pendingOrderAction.type === 'cancel'
+				? 'Sí, cancelar pedido'
+				: pendingOrderAction.type === 'approve-cancel-request'
+					? 'Sí, aceptar'
+					: 'Sí, denegar'}
 		cancelText="Volver"
-		variant={pendingOrderAction.type === 'deliver' ? 'primary' : 'danger'}
+		variant={pendingOrderAction.type === 'deliver' || pendingOrderAction.type === 'approve-cancel-request' ? 'primary' : 'danger'}
 		onCancel={closeOrderConfirm}
 		onConfirm={confirmOrderAction}
 	/>
@@ -460,6 +534,10 @@
 		margin: 0 0 1rem 0;
 		text-transform: uppercase;
 		letter-spacing: 0.5px;
+	}
+
+	:global(.title-amber) {
+		color: #fcd34d;
 	}
 
 	.items-grid {

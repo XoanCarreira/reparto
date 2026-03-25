@@ -28,7 +28,9 @@
 		password: 'cliente123',
 		zone: 1,
 		phone: '',
-		address: ''
+		address: '',
+		gpsLat: '',
+		gpsLng: ''
 	});
 
 	zonesStore.subscribe(($zones) => {
@@ -70,7 +72,9 @@
 			password: draft.password,
 			zone: Number(draft.zone),
 			phone: draft.phone,
-			address: draft.address
+			address: draft.address,
+			gpsLat: draft.gpsLat,
+			gpsLng: draft.gpsLng
 		});
 
 		editingClientId = null;
@@ -97,7 +101,9 @@
 			password: 'cliente123',
 			zone: zones[0]?.id || 1,
 			phone: '',
-			address: ''
+			address: '',
+			gpsLat: '',
+			gpsLng: ''
 		};
 	}
 
@@ -112,7 +118,9 @@
 			password: newClient.password,
 			zone: Number(newClient.zone),
 			phone: newClient.phone,
-			address: newClient.address
+			address: newClient.address,
+			gpsLat: newClient.gpsLat,
+			gpsLng: newClient.gpsLng
 		});
 		resetNewClient();
 		showClientCreate = false;
@@ -247,6 +255,26 @@
 						oninput={(e) => (newClient = { ...newClient, address: e.currentTarget.value })}
 						class="form-input"
 					/>
+					<input
+						type="number"
+						step="0.000001"
+						min="-90"
+						max="90"
+						placeholder="GPS Latitud"
+						value={newClient.gpsLat}
+						oninput={(e) => (newClient = { ...newClient, gpsLat: e.currentTarget.value })}
+						class="form-input"
+					/>
+					<input
+						type="number"
+						step="0.000001"
+						min="-180"
+						max="180"
+						placeholder="GPS Longitud"
+						value={newClient.gpsLng}
+						oninput={(e) => (newClient = { ...newClient, gpsLng: e.currentTarget.value })}
+						class="form-input"
+					/>
 				</div>
 				<div class="form-actions">
 					<Button variant="primary" size="sm" onclick={createClient}>Crear cliente</Button>
@@ -276,6 +304,7 @@
 						<th>Zona</th>
 						<th>Teléfono</th>
 						<th>Dirección</th>
+						<th>GPS</th>
 						<th class="align-center">Pedidos</th>
 						<th class="align-center">Acción</th>
 					</tr>
@@ -283,7 +312,7 @@
 				<tbody>
 					{#if clientDrafts.length === 0}
 						<tr>
-							<td colspan="9" class="table-empty">No hay clientes registrados</td>
+							<td colspan="10" class="table-empty">No hay clientes registrados</td>
 						</tr>
 					{:else}
 						{#each clientDrafts as client (client.id)}
@@ -362,6 +391,34 @@
 										/>
 									{:else}
 										{client.address || '-'}
+									{/if}
+								</td>
+								<td>
+									{#if editingClientId === client.id}
+										<div class="gps-edit-grid">
+											<input
+												type="number"
+												step="0.000001"
+												min="-90"
+												max="90"
+												value={client.gpsLat ?? ''}
+												oninput={(e) => updateClientDraft(client.id, 'gpsLat', e.currentTarget.value)}
+												class="table-input"
+											/>
+											<input
+												type="number"
+												step="0.000001"
+												min="-180"
+												max="180"
+												value={client.gpsLng ?? ''}
+												oninput={(e) => updateClientDraft(client.id, 'gpsLng', e.currentTarget.value)}
+												class="table-input"
+											/>
+										</div>
+									{:else if client.gpsLat !== null && client.gpsLat !== undefined && client.gpsLng !== null && client.gpsLng !== undefined}
+										{client.gpsLat}, {client.gpsLng}
+									{:else}
+										-
 									{/if}
 								</td>
 								<td class="align-center table-summary">
@@ -655,6 +712,12 @@
 		outline: none;
 		border-color: #3b82f6;
 		box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+	}
+
+	.gps-edit-grid {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(95px, 1fr));
+		gap: 0.4rem;
 	}
 
 	.action-buttons {

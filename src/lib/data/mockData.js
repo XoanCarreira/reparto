@@ -25,6 +25,8 @@ export const users = [
 		zone: 1,
 		phone: '+34 912 345 678',
 		address: 'Calle Mayor 123, 28001 Madrid',
+		gpsLat: 40.4168,
+		gpsLng: -3.7038,
 		createdAt: new Date('2024-02-01')
 	},
 	{
@@ -36,6 +38,8 @@ export const users = [
 		zone: 2,
 		phone: '+34 913 456 789',
 		address: 'Avenida Reina 456, 28002 Madrid',
+		gpsLat: 40.4565,
+		gpsLng: -3.6674,
 		createdAt: new Date('2024-02-15')
 	},
 	{
@@ -47,6 +51,8 @@ export const users = [
 		zone: 1,
 		phone: '+34 914 567 890',
 		address: 'Plaza Mayor 789, 28003 Madrid',
+		gpsLat: 40.4155,
+		gpsLng: -3.7074,
 		createdAt: new Date('2024-03-01')
 	},
 	{
@@ -214,6 +220,8 @@ export const deliveryStaff = [
 		id: 201,
 		name: 'Juan García',
 		zoneId: 1,
+		email: 'repartidor201@empresa.com',
+		password: 'repartidor201',
 		phone: '+34 600 111 222',
 		vehicle: 'Furgoneta Blanca',
 		status: 'active' // active, off, on_delivery
@@ -222,6 +230,8 @@ export const deliveryStaff = [
 		id: 202,
 		name: 'María López',
 		zoneId: 2,
+		email: 'repartidor202@empresa.com',
+		password: 'repartidor202',
 		phone: '+34 600 222 333',
 		vehicle: 'Furgoneta Verde',
 		status: 'active'
@@ -230,6 +240,8 @@ export const deliveryStaff = [
 		id: 203,
 		name: 'Carlos Martínez',
 		zoneId: 1,
+		email: 'repartidor203@empresa.com',
+		password: 'repartidor203',
 		phone: '+34 600 333 444',
 		vehicle: 'Furgoneta Roja',
 		status: 'active'
@@ -238,6 +250,8 @@ export const deliveryStaff = [
 		id: 204,
 		name: 'Ana Rodríguez',
 		zoneId: null, // Libre - sin zona asignada
+		email: 'repartidor204@empresa.com',
+		password: 'repartidor204',
 		phone: '+34 600 444 555',
 		vehicle: 'Furgoneta Amarilla',
 		status: 'active'
@@ -246,6 +260,8 @@ export const deliveryStaff = [
 		id: 205,
 		name: 'David Fernández',
 		zoneId: null, // Libre - sin zona asignada
+		email: 'repartidor205@empresa.com',
+		password: 'repartidor205',
 		phone: '+34 600 555 666',
 		vehicle: 'Moto Roja',
 		status: 'active'
@@ -254,6 +270,8 @@ export const deliveryStaff = [
 		id: 206,
 		name: 'Elena Gutiérrez',
 		zoneId: null, // Libre - sin zona asignada
+		email: 'repartidor206@empresa.com',
+		password: 'repartidor206',
 		phone: '+34 600 666 777',
 		vehicle: 'Bicicleta Eléctrica',
 		status: 'active'

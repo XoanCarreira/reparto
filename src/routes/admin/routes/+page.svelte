@@ -36,6 +36,8 @@
 	});
 	let newStaff = $state({
 		name: '',
+		email: '',
+		password: '',
 		phone: '',
 		vehicle: '',
 		status: 'active',
@@ -60,6 +62,8 @@
 			staffDrafts = s.map((staff) => ({
 				id: staff.id,
 				name: staff.name || '',
+				email: staff.email || '',
+				password: staff.password || '',
 				phone: staff.phone || '',
 				vehicle: staff.vehicle || '',
 				status: staff.status || 'active',
@@ -193,12 +197,14 @@
 			zoneDrafts = zoneDrafts.map((zone) =>
 				zone.id === zoneId
 					? {
-						...zone,
-						name: original.name || '',
-						deliveryDays: Array.isArray(original.deliveryDays) ? original.deliveryDays.join(', ') : '',
-						deliveryTime: original.deliveryTime || '',
-						notes: original.notes || original.description || ''
-					}
+							...zone,
+							name: original.name || '',
+							deliveryDays: Array.isArray(original.deliveryDays)
+								? original.deliveryDays.join(', ')
+								: '',
+							deliveryTime: original.deliveryTime || '',
+							notes: original.notes || original.description || ''
+						}
 					: zone
 			);
 		}
@@ -246,6 +252,8 @@
 	function resetNewStaff() {
 		newStaff = {
 			name: '',
+			email: '',
+			password: '',
 			phone: '',
 			vehicle: '',
 			status: 'active',
@@ -260,6 +268,8 @@
 
 		deliveryStaffStore.create({
 			name: newStaff.name,
+			email: newStaff.email,
+			password: newStaff.password,
 			phone: newStaff.phone,
 			vehicle: newStaff.vehicle,
 			status: newStaff.status,
@@ -293,7 +303,9 @@
 	}
 
 	function updateStaffDraft(staffId, key, value) {
-		staffDrafts = staffDrafts.map((staff) => (staff.id === staffId ? { ...staff, [key]: value } : staff));
+		staffDrafts = staffDrafts.map((staff) =>
+			staff.id === staffId ? { ...staff, [key]: value } : staff
+		);
 	}
 
 	function saveStaffMember(staffId) {
@@ -304,6 +316,8 @@
 
 		deliveryStaffStore.updateStaff(staffId, {
 			name: draft.name,
+			email: draft.email,
+			password: draft.password,
 			phone: draft.phone,
 			vehicle: draft.vehicle,
 			status: draft.status,
@@ -322,13 +336,15 @@
 			staffDrafts = staffDrafts.map((staff) =>
 				staff.id === staffId
 					? {
-						...staff,
-						name: original.name || '',
-						phone: original.phone || '',
-						vehicle: original.vehicle || '',
-						status: original.status || 'active',
-						zoneId: original.zoneId ?? ''
-					}
+							...staff,
+							name: original.name || '',
+							email: original.email || '',
+							password: original.password || '',
+							phone: original.phone || '',
+							vehicle: original.vehicle || '',
+							status: original.status || 'active',
+							zoneId: original.zoneId ?? ''
+						}
 					: staff
 			);
 		}
@@ -337,7 +353,7 @@
 </script>
 
 <!-- Contenedor principal -->
-<div class="routes-container">
+<div class="routes-container animate-fadeIn">
 	<!-- Encabezado -->
 	<div class="routes-header">
 		<h1 class="routes-title">🗺️ Gestión de Rutas</h1>
@@ -357,7 +373,9 @@
 							<div class="route-header">
 								<h3 class="route-name">{route.name}</h3>
 								<Badge
-									label={route.staff.length > 0 ? `${route.staff.length} repartidor(es)` : 'Sin cobertura'}
+									label={route.staff.length > 0
+										? `${route.staff.length} repartidor(es)`
+										: 'Sin cobertura'}
 									color={route.staff.length > 0 ? 'success' : 'warning'}
 								/>
 							</div>
@@ -373,10 +391,7 @@
 							<div class="route-staff-list">
 								{#if route.staff.length === 0}
 									<p class="no-staff">Sin repartidor asignado</p>
-									<button
-										onclick={() => openAssignmentModal(null, route.id)}
-										class="btn-assign"
-									>
+									<button onclick={() => openAssignmentModal(null, route.id)} class="btn-assign">
 										+ Asignar repartidor
 									</button>
 								{:else}
@@ -631,7 +646,8 @@
 										<input
 											type="text"
 											value={zone.deliveryDays}
-											oninput={(e) => updateZoneDraft(zone.id, 'deliveryDays', e.currentTarget.value)}
+											oninput={(e) =>
+												updateZoneDraft(zone.id, 'deliveryDays', e.currentTarget.value)}
 											class="table-input"
 										/>
 									{:else}
@@ -643,7 +659,8 @@
 										<input
 											type="text"
 											value={zone.deliveryTime}
-											oninput={(e) => updateZoneDraft(zone.id, 'deliveryTime', e.currentTarget.value)}
+											oninput={(e) =>
+												updateZoneDraft(zone.id, 'deliveryTime', e.currentTarget.value)}
 											class="table-input"
 										/>
 									{:else}
@@ -671,7 +688,11 @@
 											<Button variant="secondary" size="sm" onclick={() => cancelEditZone(zone.id)}>
 												Cancelar
 											</Button>
-											<Button variant="danger" size="sm" onclick={() => requestDeleteZone(zone.id, zone.name)}>
+											<Button
+												variant="danger"
+												size="sm"
+												onclick={() => requestDeleteZone(zone.id, zone.name)}
+											>
 												Eliminar
 											</Button>
 										{:else}
@@ -698,12 +719,26 @@
 
 		{#if showStaffCreate}
 			<div class="form-section">
-				<div class="form-grid form-grid-5">
+				<div class="form-grid form-grid-6">
 					<input
 						type="text"
 						placeholder="Nombre"
 						value={newStaff.name}
 						oninput={(e) => (newStaff = { ...newStaff, name: e.currentTarget.value })}
+						class="form-input"
+					/>
+					<input
+						type="email"
+						placeholder="Email acceso"
+						value={newStaff.email}
+						oninput={(e) => (newStaff = { ...newStaff, email: e.currentTarget.value })}
+						class="form-input"
+					/>
+					<input
+						type="text"
+						placeholder="Contraseña"
+						value={newStaff.password}
+						oninput={(e) => (newStaff = { ...newStaff, password: e.currentTarget.value })}
 						class="form-input"
 					/>
 					<input
@@ -762,6 +797,8 @@
 					<tr>
 						<th>ID</th>
 						<th>Nombre</th>
+						<th>Email</th>
+						<th>Contraseña</th>
 						<th>Teléfono</th>
 						<th>Vehículo</th>
 						<th>Estado</th>
@@ -772,7 +809,7 @@
 				<tbody>
 					{#if allStaff.length === 0}
 						<tr>
-							<td colspan="7" class="table-empty">No hay repartidores registrados</td>
+							<td colspan="9" class="table-empty">No hay repartidores registrados</td>
 						</tr>
 					{:else}
 						{#each staffDrafts as staff (staff.id)}
@@ -788,6 +825,30 @@
 										/>
 									{:else}
 										{staff.name}
+									{/if}
+								</td>
+								<td>
+									{#if editingStaffId === staff.id}
+										<input
+											type="email"
+											value={staff.email}
+											oninput={(e) => updateStaffDraft(staff.id, 'email', e.currentTarget.value)}
+											class="table-input"
+										/>
+									{:else}
+										{staff.email || '-'}
+									{/if}
+								</td>
+								<td>
+									{#if editingStaffId === staff.id}
+										<input
+											type="text"
+											value={staff.password}
+											oninput={(e) => updateStaffDraft(staff.id, 'password', e.currentTarget.value)}
+											class="table-input"
+										/>
+									{:else}
+										{staff.password || '-'}
 									{/if}
 								</td>
 								<td>
@@ -851,14 +912,26 @@
 											<Button variant="primary" size="sm" onclick={() => saveStaffMember(staff.id)}>
 												Guardar
 											</Button>
-											<Button variant="secondary" size="sm" onclick={() => cancelEditStaff(staff.id)}>
+											<Button
+												variant="secondary"
+												size="sm"
+												onclick={() => cancelEditStaff(staff.id)}
+											>
 												Cancelar
 											</Button>
-											<Button variant="danger" size="sm" onclick={() => requestDeleteStaff(staff.id, staff.name)}>
+											<Button
+												variant="danger"
+												size="sm"
+												onclick={() => requestDeleteStaff(staff.id, staff.name)}
+											>
 												Eliminar
 											</Button>
 										{:else}
-											<Button variant="secondary" size="sm" onclick={() => startEditStaff(staff.id)}>
+											<Button
+												variant="secondary"
+												size="sm"
+												onclick={() => startEditStaff(staff.id)}
+											>
 												Editar
 											</Button>
 										{/if}
@@ -900,12 +973,7 @@
 					>
 						✓ Confirmar
 					</button>
-					<button
-						onclick={closeAssignmentModal}
-						class="btn-cancel"
-					>
-						✕ Cancelar
-					</button>
+					<button onclick={closeAssignmentModal} class="btn-cancel"> ✕ Cancelar </button>
 				</div>
 			</div>
 		</div>
@@ -935,6 +1003,23 @@
 </div>
 
 <style>
+	/* ============================================
+	 * ANIMACIONES
+	 * ============================================ */
+	@keyframes fadeIn {
+		from {
+			opacity: 0;
+			transform: translateY(10px);
+		}
+		to {
+			opacity: 1;
+			transform: translateY(0);
+		}
+	}
+
+	.animate-fadeIn {
+		animation: fadeIn 0.5s ease-in-out;
+	}
 	/* ============================================
 	 * CONTENEDOR PRINCIPAL
 	 * ============================================ */
@@ -1001,7 +1086,7 @@
 		margin-bottom: 1rem;
 	}
 
-	.form-grid-5 {
+	.form-grid-6 {
 		grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
 	}
 
@@ -1143,7 +1228,7 @@
 			gap: 1.5rem;
 		}
 
-		.form-grid-5 {
+		.form-grid-6 {
 			grid-template-columns: 1fr;
 		}
 

@@ -59,8 +59,8 @@
 					onclick={() => navigateTo(getHomePathByRole(currentUser?.role))}
 					class="navbar-brand"
 				>
-					<span class="navbar-logo">📦</span>
-					<span class="navbar-brand-text">Reparto</span>
+					<img class="navbar-logo" src='../logo_xeos.png' alt="Xeos da Ulla">
+					
 				</button>
 			</div>
 
@@ -269,30 +269,25 @@
 		justify-content: space-between;
 	}
 
-	.navbar-brand-wrap {
-		min-width: 0;
+	.navbar-logo{
+		max-width: 80px;
 	}
 
 	.navbar-brand {
 		display: inline-flex;
 		align-items: center;
-		gap: 0.5rem;
 		transition: opacity 0.2s ease;
+		padding: 5px 10px;
+		border-radius: 0.5rem;
+		background-color: white;
 	}
 
 	.navbar-brand:hover {
 		opacity: 0.85;
 	}
 
-	.navbar-logo {
-		font-size: 1.5rem;
-	}
 
-	.navbar-brand-text {
-		font-weight: 700;
-		color: #f9f1f2;
-		display: none;
-	}
+
 
 	.navbar-desktop-menu,
 	.navbar-desktop-user {
@@ -429,9 +424,7 @@
 			padding: 0 1.5rem;
 		}
 
-		.navbar-brand-text {
-			display: inline;
-		}
+
 	}
 
 	@media (min-width: 768px) {
