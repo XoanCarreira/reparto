@@ -23,4 +23,6 @@ vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 
 # MD
-_no.md
+BUGFIX_no.md
+DEPLOYMENT_no.md
+SECURITY_no.md
