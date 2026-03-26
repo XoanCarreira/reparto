@@ -7,7 +7,8 @@
 
 	import Card from '$lib/components/Card.svelte';
 	import Button from '$lib/components/Button.svelte';
-	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
+	import { browser } from '$app/environment';
+	import { onMount } from 'svelte';
 	import { clientsStore, zonesStore, ordersStore } from '$lib/stores/dataStore.js';
 	import { formatCurrency } from '$lib/utils/helpers.js';
 
@@ -15,6 +16,8 @@
 	let clients = $state([]);
 	let allOrders = $state([]);
 	let clientDrafts = $state([]);
+	let statusFilter = $state('all');
+	const statusFilterStorageKey = 'admin-clients-status-filter';
 	let editingClientId = $state(null);
 	let showClientCreate = $state(false);
 	let confirmDeleteOpen = $state(false);
@@ -22,6 +25,9 @@
 		id: null,
 		name: ''
 	});
+	let deleteError = $state('');
+	let statusMessage = $state('');
+	let statusMessageTimeoutId = null;
 	let newClient = $state({
 		name: '',
 		email: '',
@@ -54,6 +60,55 @@
 		allOrders.reduce((sum, order) => sum + (Number(order.totalAmount) || 0), 0)
 	);
 
+	const filteredClientDrafts = $derived(
+		clientDrafts.filter((client) => {
+			if (statusFilter === 'active') return client.isActive !== false;
+			if (statusFilter === 'inactive') return client.isActive === false;
+			return true;
+		})
+	);
+
+	// Modo tabla: compacta al visualizar, completa al editar.
+	const showExtendedColumns = $derived(editingClientId !== null);
+
+	onMount(() => {
+		if (!browser) {
+			return;
+		}
+
+		const stored = localStorage.getItem(statusFilterStorageKey);
+		if (stored === 'active' || stored === 'inactive' || stored === 'all') {
+			statusFilter = stored;
+		}
+	});
+
+	$effect(() => {
+		if (!browser) {
+			return;
+		}
+
+		localStorage.setItem(statusFilterStorageKey, statusFilter);
+	});
+
+	$effect(() => {
+		if (!statusMessage) {
+			if (statusMessageTimeoutId) {
+				clearTimeout(statusMessageTimeoutId);
+				statusMessageTimeoutId = null;
+			}
+			return;
+		}
+
+		if (statusMessageTimeoutId) {
+			clearTimeout(statusMessageTimeoutId);
+		}
+
+		statusMessageTimeoutId = setTimeout(() => {
+			statusMessage = '';
+			statusMessageTimeoutId = null;
+		}, 3200);
+	});
+
 	function updateClientDraft(clientId, key, value) {
 		clientDrafts = clientDrafts.map((client) =>
 			client.id === clientId ? { ...client, [key]: value } : client
@@ -63,6 +118,17 @@
 	function saveClient(clientId) {
 		const draft = clientDrafts.find((client) => client.id === clientId);
 		if (!draft || !draft.name?.trim() || !draft.email?.trim()) {
+			return;
+		}
+
+		const original = clients.find((client) => client.id === clientId);
+		const emailChanged =
+			String(original?.email || '').trim().toLowerCase() !== String(draft.email || '').trim().toLowerCase();
+		const passwordChanged = String(draft.password || '').trim().length > 0;
+
+		if (emailChanged && !passwordChanged) {
+			deleteError = 'Para cambiar el email debes indicar una contraseña explícita.';
+			statusMessage = '';
 			return;
 		}
 
@@ -137,20 +203,53 @@
 
 	function requestDelete(id, name) {
 		pendingDelete = { id, name };
+		deleteError = '';
+		statusMessage = '';
 		confirmDeleteOpen = true;
 	}
 
 	function closeDeleteConfirm() {
 		confirmDeleteOpen = false;
 		pendingDelete = { id: null, name: '' };
+		deleteError = '';
 	}
 
-	function confirmDelete() {
+	async function toggleClientActive(client) {
+		statusMessage = '';
+		deleteError = '';
+
+		const nextState = client.isActive === false;
+		const result = await clientsStore.setActive(client.id, nextState);
+		if (!result?.success) {
+			deleteError = 'No se pudo actualizar estado del cliente en base de datos.';
+			return;
+		}
+
+		statusMessage = nextState
+			? `Cliente ${client.name} activado correctamente.`
+			: `Cliente ${client.name} desactivado correctamente.`;
+	}
+
+	async function confirmDelete() {
 		if (!pendingDelete.id) {
 			return;
 		}
 
-		clientsStore.remove(pendingDelete.id);
+		const result = await clientsStore.remove(pendingDelete.id);
+		if (!result?.success) {
+			if (result.reason === 'has_non_cancelled_orders') {
+				deleteError = 'No se puede eliminar: el cliente tiene pedidos no cancelados (pendiente, en reparto o entregado).';
+			} else {
+				deleteError = 'No se pudo eliminar en base de datos. Revisa permisos RLS o referencias activas.';
+			}
+			return;
+		}
+
+		statusMessage =
+			result.deletedClosedOrders > 0
+				? `Cliente eliminado. Se borraron ${result.deletedClosedOrders} pedidos cancelados/devueltos asociados.`
+				: 'Cliente eliminado correctamente.';
+
 		if (editingClientId === pendingDelete.id) {
 			editingClientId = null;
 		}
@@ -202,6 +301,19 @@
 	<Card title="🏪 Gestión de Clientes" titleClass="title-violet" class="card-section">
 		<!-- Botón de nuevo cliente -->
 		<div class="form-header">
+			<div class="toolbar-filter">
+				<label for="client-status-filter">Estado:</label>
+				<select
+					id="client-status-filter"
+					class="form-input"
+					value={statusFilter}
+					onchange={(e) => (statusFilter = e.currentTarget.value)}
+				>
+					<option value="all">Todos ({clientDrafts.length})</option>
+					<option value="active">Activos ({clientDrafts.filter((c) => c.isActive !== false).length})</option>
+					<option value="inactive">Desactivados ({clientDrafts.filter((c) => c.isActive === false).length})</option>
+				</select>
+			</div>
 			<Button variant="primary" size="sm" onclick={() => (showClientCreate = !showClientCreate)}>
 				{showClientCreate ? '✕ Cerrar' : '+ Nuevo cliente'}
 			</Button>
@@ -293,6 +405,32 @@
 		{/if}
 
 		<!-- Tabla de clientes -->
+		{#if confirmDeleteOpen}
+			<div class="delete-confirm-banner" role="alert" aria-live="polite">
+				<div class="delete-confirm-content">
+					<p class="delete-confirm-title">Confirmar eliminación</p>
+					<p class="delete-confirm-text">
+						Se eliminará <strong>{pendingDelete.name || 'este cliente'}</strong>. Esta acción no se puede deshacer.
+					</p>
+					{#if getClientOrdersCount(pendingDelete.id) > 0}
+						<p class="delete-confirm-warning">
+							Si todos los pedidos asociados están cancelados, se eliminarán junto al cliente.
+						</p>
+					{/if}
+				</div>
+				<div class="delete-confirm-actions">
+					<Button variant="secondary" size="sm" onclick={closeDeleteConfirm}>Cancelar</Button>
+					<Button variant="danger" size="sm" onclick={confirmDelete}>Sí, eliminar</Button>
+				</div>
+			</div>
+		{/if}
+
+		{#if deleteError}
+			<div class="inline-error">{deleteError}</div>
+		{/if}
+		{#if statusMessage}
+			<div class="inline-success">{statusMessage}</div>
+		{/if}
 		<div class="table-wrapper">
 			<table class="admin-table">
 				<thead>
@@ -300,22 +438,25 @@
 						<th>ID</th>
 						<th>Nombre</th>
 						<th>Email</th>
-						<th>Password</th>
+						<th>Estado</th>
 						<th>Zona</th>
 						<th>Teléfono</th>
 						<th>Dirección</th>
-						<th>GPS</th>
+						{#if showExtendedColumns}
+							<th>Password</th>
+							<th>GPS</th>
+						{/if}
 						<th class="align-center">Pedidos</th>
 						<th class="align-center">Acción</th>
 					</tr>
 				</thead>
 				<tbody>
-					{#if clientDrafts.length === 0}
+					{#if filteredClientDrafts.length === 0}
 						<tr>
-							<td colspan="10" class="table-empty">No hay clientes registrados</td>
+							<td colspan={showExtendedColumns ? 11 : 9} class="table-empty">No hay clientes para este filtro</td>
 						</tr>
 					{:else}
-						{#each clientDrafts as client (client.id)}
+						{#each filteredClientDrafts as client (client.id)}
 							<tr>
 								<td class="table-id">{client.id}</td>
 								<td>
@@ -343,16 +484,9 @@
 									{/if}
 								</td>
 								<td>
-									{#if editingClientId === client.id}
-										<input
-											type="text"
-											value={client.password}
-											oninput={(e) => updateClientDraft(client.id, 'password', e.currentTarget.value)}
-											class="table-input"
-										/>
-									{:else}
-										{client.password}
-									{/if}
+									<span class={`state-pill ${client.isActive === false ? 'off' : 'on'}`}>
+										{client.isActive === false ? 'Desactivado' : 'Activo'}
+									</span>
 								</td>
 								<td>
 									{#if editingClientId === client.id}
@@ -393,39 +527,60 @@
 										{client.address || '-'}
 									{/if}
 								</td>
-								<td>
-									{#if editingClientId === client.id}
-										<div class="gps-edit-grid">
+								{#if showExtendedColumns}
+									<td>
+										{#if editingClientId === client.id}
 											<input
-												type="number"
-												step="0.000001"
-												min="-90"
-												max="90"
-												value={client.gpsLat ?? ''}
-												oninput={(e) => updateClientDraft(client.id, 'gpsLat', e.currentTarget.value)}
+												type="text"
+												value={client.password}
+												oninput={(e) => updateClientDraft(client.id, 'password', e.currentTarget.value)}
 												class="table-input"
 											/>
-											<input
-												type="number"
-												step="0.000001"
-												min="-180"
-												max="180"
-												value={client.gpsLng ?? ''}
-												oninput={(e) => updateClientDraft(client.id, 'gpsLng', e.currentTarget.value)}
-												class="table-input"
-											/>
-										</div>
-									{:else if client.gpsLat !== null && client.gpsLat !== undefined && client.gpsLng !== null && client.gpsLng !== undefined}
-										{client.gpsLat}, {client.gpsLng}
-									{:else}
-										-
-									{/if}
-								</td>
+										{:else}
+											{client.password}
+										{/if}
+									</td>
+									<td>
+										{#if editingClientId === client.id}
+											<div class="gps-edit-grid">
+												<input
+													type="number"
+													step="0.000001"
+													min="-90"
+													max="90"
+													value={client.gpsLat ?? ''}
+													oninput={(e) => updateClientDraft(client.id, 'gpsLat', e.currentTarget.value)}
+													class="table-input"
+												/>
+												<input
+													type="number"
+													step="0.000001"
+													min="-180"
+													max="180"
+													value={client.gpsLng ?? ''}
+													oninput={(e) => updateClientDraft(client.id, 'gpsLng', e.currentTarget.value)}
+													class="table-input"
+												/>
+											</div>
+										{:else if client.gpsLat !== null && client.gpsLat !== undefined && client.gpsLng !== null && client.gpsLng !== undefined}
+											{client.gpsLat}, {client.gpsLng}
+										{:else}
+											-
+										{/if}
+									</td>
+								{/if}
 								<td class="align-center table-summary">
 									{getClientOrdersCount(client.id)} {getZoneName(client.zone)}
 								</td>
 								<td class="align-center">
 									<div class="action-buttons">
+										<Button
+											variant={client.isActive === false ? 'primary' : 'secondary'}
+											size="sm"
+											onclick={() => toggleClientActive(client)}
+										>
+											{client.isActive === false ? 'Activar' : 'Desactivar'}
+										</Button>
 										{#if editingClientId === client.id}
 											<Button variant="primary" size="sm" onclick={() => saveClient(client.id)}>
 												Guardar
@@ -455,16 +610,6 @@
 		</div>
 	</Card>
 
-	<ConfirmDialog
-		open={confirmDeleteOpen}
-		title="Eliminar Cliente"
-		message={`Se eliminará ${pendingDelete.name || 'este registro'}. Esta acción no se puede deshacer.`}
-		confirmText="Sí, eliminar"
-		cancelText="Cancelar"
-		variant="danger"
-		onCancel={closeDeleteConfirm}
-		onConfirm={confirmDelete}
-	/>
 </div>
 
 <style>
@@ -573,7 +718,21 @@
 	.form-header {
 		margin-bottom: 1.5rem;
 		display: flex;
+		gap: 0.75rem;
 		justify-content: flex-end;
+		align-items: center;
+	}
+
+	.toolbar-filter {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		min-width: 240px;
+	}
+
+	.toolbar-filter label {
+		font-size: 0.85rem;
+		color: #cbd5e1;
 	}
 
 	.form-section {
@@ -620,6 +779,96 @@
 		display: flex;
 		gap: 0.75rem;
 		flex-wrap: wrap;
+	}
+
+	.inline-error {
+		margin-bottom: 1rem;
+		padding: 0.75rem 1rem;
+		border-radius: 0.45rem;
+		border: 1px solid #7f1d1d;
+		background: #3f1d1d;
+		color: #fecaca;
+		font-size: 0.9rem;
+	}
+
+	.inline-success {
+		margin-bottom: 1rem;
+		padding: 0.75rem 1rem;
+		border-radius: 0.45rem;
+		border: 1px solid #14532d;
+		background: #052e1a;
+		color: #bbf7d0;
+		font-size: 0.9rem;
+	}
+
+	.delete-confirm-banner {
+		margin-bottom: 1rem;
+		padding: 1rem;
+		border-radius: 0.65rem;
+		border: 1px solid rgba(239, 68, 68, 0.45);
+		background:
+			radial-gradient(circle at top right, rgba(248, 113, 113, 0.2), transparent 46%),
+			linear-gradient(135deg, rgba(69, 10, 10, 0.75), rgba(63, 19, 19, 0.92));
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		gap: 1rem;
+		box-shadow: 0 10px 30px rgba(127, 29, 29, 0.2);
+	}
+
+	.delete-confirm-content {
+		display: flex;
+		flex-direction: column;
+		gap: 0.35rem;
+	}
+
+	.delete-confirm-title {
+		margin: 0;
+		font-size: 1rem;
+		font-weight: 700;
+		color: #fee2e2;
+	}
+
+	.delete-confirm-text {
+		margin: 0;
+		font-size: 0.9rem;
+		color: #fecaca;
+	}
+
+	.delete-confirm-warning {
+		margin: 0;
+		font-size: 0.85rem;
+		color: #fcd34d;
+	}
+
+	.delete-confirm-actions {
+		display: flex;
+		gap: 0.6rem;
+		align-items: center;
+		flex-wrap: wrap;
+	}
+
+	.state-pill {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		min-width: 92px;
+		padding: 0.25rem 0.55rem;
+		border-radius: 999px;
+		font-size: 0.75rem;
+		font-weight: 700;
+	}
+
+	.state-pill.on {
+		background: rgba(16, 185, 129, 0.2);
+		color: #6ee7b7;
+		border: 1px solid rgba(16, 185, 129, 0.4);
+	}
+
+	.state-pill.off {
+		background: rgba(239, 68, 68, 0.2);
+		color: #fca5a5;
+		border: 1px solid rgba(239, 68, 68, 0.4);
 	}
 
 	.table-empty {
@@ -743,6 +992,11 @@
 	@media (max-width: 768px) {
 		.page-root {
 			padding: 1rem;
+		}
+
+		.delete-confirm-banner {
+			flex-direction: column;
+			align-items: flex-start;
 		}
 
 		.page-title {

@@ -28,7 +28,6 @@
 	let allStaff = $state([]);
 	let allProducts = $state([]);
 
-	let routeActive = $state(false);
 	let deliveryNotes = $state({});
 	let internalIncidentText = $state({});
 	let preferredDeliveryOrder = $state([]);
@@ -104,7 +103,16 @@
 		})
 	);
 
-	const routeOrders = $derived(assignedOrders.filter((order) => order.status === 'pending'));
+	// Incluye pendientes y en reparto para que la ruta activa no "desaparezca" tras iniciar reparto.
+	const routeOrders = $derived(
+		assignedOrders.filter((order) => order.status === 'pending' || order.status === 'in_delivery')
+	);
+
+	// Una ruta se considera activa si hay pedidos en estado "en reparto" en la zona asignada.
+	const inDeliveryAssignedOrders = $derived(
+		assignedOrders.filter((order) => order.status === 'in_delivery')
+	);
+	const routeActive = $derived(inDeliveryAssignedOrders.length > 0);
 
 	const preferredOrderStorageKey = $derived(
 		(currentDeliveryStaff?.id || currentUser?.deliveryStaffId || currentUser?.id)
@@ -267,7 +275,16 @@
 	}
 
 	function toggleRoute() {
-		routeActive = !routeActive;
+		if (!routeActive) {
+			// Al iniciar ruta, todos los pedidos pendientes de la zona pasan a "en reparto".
+			assignedOrders
+				.filter((order) => order.status === 'pending')
+				.forEach((order) => ordersStore.markInDelivery(order.id));
+			return;
+		}
+
+		// Al parar ruta, los pedidos no entregados vuelven a "pendiente".
+		inDeliveryAssignedOrders.forEach((order) => ordersStore.updateStatus(order.id, 'pending'));
 	}
 
 	function updateNote(orderId, value) {
@@ -285,21 +302,24 @@
 		deliveryNotes = { ...deliveryNotes, [orderId]: '' };
 	}
 
-	function createInternalIncident(orderId) {
+	async function createInternalIncident(orderId) {
 		const description = String(internalIncidentText[orderId] || '').trim();
 		if (!description) return;
 
 		const order = allOrders.find((item) => item.id === orderId);
 		if (!order) return;
 
-		incidentsStore.create(
+		const result = await incidentsStore.create(
 			orderId,
 			order.clientId,
 			'other',
 			`[Interna Repartidor] ${description}`,
 			'high'
 		);
-		internalIncidentText = { ...internalIncidentText, [orderId]: '' };
+
+		if (result?.ok) {
+			internalIncidentText = { ...internalIncidentText, [orderId]: '' };
+		}
 	}
 </script>
 

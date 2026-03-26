@@ -111,9 +111,10 @@ export function getStatusColor(status) {
 	const colors = {
 		pending: 'status-pending',
 		delivered: 'status-delivered',
+		returned: 'status-returned',
 		cancelled: 'status-cancelled',
 		open: 'status-open',
-		'in_progress': 'status-in-progress',
+		in_progress: 'status-in-progress',
 		in_delivery: 'status-on-delivery',
 		resolved: 'status-resolved',
 		active: 'status-active',
@@ -135,6 +136,7 @@ export function getStatusLabel(status) {
 	const labels = {
 		pending: 'Pendiente',
 		delivered: 'Entregado',
+		returned: 'Devuelto',
 		cancelled: 'Cancelado',
 		open: 'Abierto',
 		in_progress: 'En proceso',

@@ -28,6 +28,9 @@
 	let pendingDeleteZone = $state(null);
 	let showDeleteStaffConfirm = $state(false);
 	let pendingDeleteStaff = $state(null);
+	let assignmentError = $state('');
+	let staffError = $state('');
+	let staffMessage = $state('');
 	let newZone = $state({
 		name: '',
 		deliveryDays: '',
@@ -97,6 +100,7 @@
 		if (!staffId) return;
 		const validZoneId = zoneId === null || zoneId === '' ? null : Number(zoneId);
 		deliveryStaffStore.assignZone(staffId, validZoneId);
+		assignmentError = '';
 		selectedAssignmentStaff = null;
 		selectedAssignmentZone = null;
 	}
@@ -117,14 +121,25 @@
 	function openAssignmentModal(staffId, zoneId) {
 		selectedAssignmentStaff = staffId;
 		selectedAssignmentZone = zoneId;
+		assignmentError = '';
 	}
 
 	/**
 	 * Cierra el modal de asignación
 	 */
 	function closeAssignmentModal() {
+		assignmentError = '';
 		selectedAssignmentStaff = null;
 		selectedAssignmentZone = null;
+	}
+
+	function confirmAssignmentFromModal() {
+		if (!selectedAssignmentStaff) {
+			assignmentError = 'Selecciona un repartidor disponible para continuar.';
+			return;
+		}
+
+		assignStaffToZone(selectedAssignmentStaff, selectedAssignmentZone);
 	}
 
 	/**
@@ -314,6 +329,18 @@
 			return;
 		}
 
+		const original = allStaff.find((staff) => Number(staff.id) === Number(staffId));
+		const emailChanged =
+			String(original?.email || '').trim().toLowerCase() !== String(draft.email || '').trim().toLowerCase();
+		const passwordChanged = String(draft.password || '').trim().length > 0;
+
+		// Seguridad: para cambiar email en Auth exigimos contraseña explícita.
+		if (emailChanged && !passwordChanged) {
+			staffError = 'Para cambiar el email del repartidor debes indicar una contraseña explícita.';
+			staffMessage = '';
+			return;
+		}
+
 		deliveryStaffStore.updateStaff(staffId, {
 			name: draft.name,
 			email: draft.email,
@@ -323,10 +350,14 @@
 			status: draft.status,
 			zoneId: draft.zoneId === '' ? null : Number(draft.zoneId)
 		});
+
+		staffError = '';
+		staffMessage = 'Repartidor actualizado correctamente.';
 		editingStaffId = null;
 	}
 
 	function startEditStaff(staffId) {
+		staffError = '';
 		editingStaffId = staffId;
 	}
 
@@ -348,6 +379,7 @@
 					: staff
 			);
 		}
+		staffError = '';
 		editingStaffId = null;
 	}
 </script>
@@ -717,6 +749,13 @@
 			</Button>
 		</div>
 
+		{#if staffError}
+			<div class="inline-error">{staffError}</div>
+		{/if}
+		{#if staffMessage}
+			<div class="inline-success">{staffMessage}</div>
+		{/if}
+
 		{#if showStaffCreate}
 			<div class="form-section">
 				<div class="form-grid form-grid-6">
@@ -946,7 +985,7 @@
 	</Card>
 
 	<!-- MODAL de confirmación de asignación -->
-	{#if selectedAssignmentStaff !== null && selectedAssignmentZone !== null}
+	{#if selectedAssignmentZone !== null}
 		<div
 			class="modal-overlay"
 			role="presentation"
@@ -962,15 +1001,36 @@
 				onkeydown={(e) => e.stopPropagation()}
 			>
 				<h3 class="modal-title">Confirmar Asignación</h3>
-				<p class="modal-message">
-					¿Asignar a <strong>{getStaffName(selectedAssignmentStaff)}</strong> a esta zona?
-				</p>
+
+				{#if selectedAssignmentStaff === null}
+					<p class="modal-message">Selecciona un repartidor libre para esta zona.</p>
+					<select
+						class="form-input"
+						value=""
+						onchange={(e) => {
+							selectedAssignmentStaff = e.currentTarget.value
+								? Number(e.currentTarget.value)
+								: null;
+							assignmentError = '';
+						}}
+					>
+						<option value="">Selecciona un repartidor...</option>
+						{#each freeStaff as staff (staff.id)}
+							<option value={staff.id}>{staff.name} - {staff.phone}</option>
+						{/each}
+					</select>
+				{:else}
+					<p class="modal-message">
+						¿Asignar a <strong>{getStaffName(selectedAssignmentStaff)}</strong> a esta zona?
+					</p>
+				{/if}
+
+				{#if assignmentError}
+					<p class="modal-error">{assignmentError}</p>
+				{/if}
 
 				<div class="modal-actions">
-					<button
-						onclick={() => assignStaffToZone(selectedAssignmentStaff, selectedAssignmentZone)}
-						class="btn-confirm"
-					>
+					<button onclick={confirmAssignmentFromModal} class="btn-confirm">
 						✓ Confirmar
 					</button>
 					<button onclick={closeAssignmentModal} class="btn-cancel"> ✕ Cancelar </button>
@@ -1120,6 +1180,26 @@
 		display: flex;
 		gap: 0.75rem;
 		flex-wrap: wrap;
+	}
+
+	.inline-error {
+		margin-bottom: 1rem;
+		padding: 0.75rem 1rem;
+		border-radius: 0.45rem;
+		border: 1px solid #7f1d1d;
+		background: #3f1d1d;
+		color: #fecaca;
+		font-size: 0.9rem;
+	}
+
+	.inline-success {
+		margin-bottom: 1rem;
+		padding: 0.75rem 1rem;
+		border-radius: 0.45rem;
+		border: 1px solid #14532d;
+		background: #052e1a;
+		color: #bbf7d0;
+		font-size: 0.9rem;
 	}
 
 	.table-wrapper {
@@ -1675,6 +1755,12 @@
 		color: #cbd5e1;
 		margin: 0 0 1.5rem 0;
 		line-height: 1.5;
+	}
+
+	.modal-error {
+		margin: 0.75rem 0 1rem;
+		font-size: 0.85rem;
+		color: #fecaca;
 	}
 
 	.modal-actions {

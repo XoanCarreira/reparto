@@ -11,10 +11,10 @@
 	import Button from '$lib/components/Button.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import { ordersStore, clientsStore, zonesStore, productsStore } from '$lib/stores/dataStore.js';
-	import { formatCurrency, formatDate } from '$lib/utils/helpers.js';
+	import { formatCurrency, formatDateTime } from '$lib/utils/helpers.js';
 
 	// Filtros
-	let statusFilter = $state('all'); // all, pending, delivered, cancelled
+	let statusFilter = $state('all'); // all, pending, in_delivery, delivered, returned, cancelled
 	let zoneFilter = $state('all'); // all o id de zona
 
 	let allOrders = $state([]);
@@ -22,6 +22,10 @@
 	let allZones = $state([]);
 	let allProducts = $state([]);
 	let confirmOpen = $state(false);
+	let deleteConfirmOpen = $state(false);
+	let pendingDeleteOrder = $state({ id: null, clientId: null, status: '' });
+	let deleteError = $state('');
+	let deleteMessage = $state('');
 	let pendingOrderAction = $state({
 		type: '',
 		orderId: null
@@ -97,6 +101,11 @@
 		confirmOpen = true;
 	}
 
+	function returnOrder(orderId) {
+		pendingOrderAction = { type: 'return', orderId };
+		confirmOpen = true;
+	}
+
 	function approveCancelRequest(orderId) {
 		pendingOrderAction = { type: 'approve-cancel-request', orderId };
 		confirmOpen = true;
@@ -112,6 +121,43 @@
 		pendingOrderAction = { type: '', orderId: null };
 	}
 
+	function requestDeleteOrder(order) {
+		// Solo los pedidos pendientes se pueden eliminar completamente.
+		if (order.status !== 'pending') {
+			return;
+		}
+
+		pendingDeleteOrder = { id: order.id, clientId: order.clientId, status: order.status };
+		deleteError = '';
+		deleteMessage = '';
+		deleteConfirmOpen = true;
+	}
+
+	function closeDeleteOrderConfirm() {
+		deleteConfirmOpen = false;
+		pendingDeleteOrder = { id: null, clientId: null, status: '' };
+	}
+
+	async function confirmDeleteOrder() {
+		if (!pendingDeleteOrder.id) {
+			return;
+		}
+
+		if (pendingDeleteOrder.status !== 'pending') {
+			deleteError = 'Solo se pueden eliminar pedidos en estado pendiente.';
+			return;
+		}
+
+		const result = await ordersStore.deletePermanent(pendingDeleteOrder.id);
+		if (!result?.success) {
+			deleteError = 'No se pudo eliminar el pedido definitivamente en base de datos.';
+			return;
+		}
+
+		deleteMessage = `Pedido #${pendingDeleteOrder.id} eliminado definitivamente.`;
+		closeDeleteOrderConfirm();
+	}
+
 	function confirmOrderAction() {
 		if (!pendingOrderAction.orderId) {
 			return;
@@ -119,6 +165,8 @@
 
 		if (pendingOrderAction.type === 'deliver') {
 			ordersStore.updateStatus(pendingOrderAction.orderId, 'delivered');
+		} else if (pendingOrderAction.type === 'return') {
+			ordersStore.updateStatus(pendingOrderAction.orderId, 'returned');
 		} else if (pendingOrderAction.type === 'cancel') {
 			ordersStore.updateStatus(pendingOrderAction.orderId, 'cancelled');
 		} else if (pendingOrderAction.type === 'approve-cancel-request') {
@@ -153,6 +201,13 @@
 		<h1 class="page-title">📦 Gestión de Pedidos</h1>
 		<p class="page-subtitle">Total: {allOrders.length} pedidos registrados</p>
 	</div>
+
+	{#if deleteError}
+		<div class="inline-error">{deleteError}</div>
+	{/if}
+	{#if deleteMessage}
+		<div class="inline-success">{deleteMessage}</div>
+	{/if}
 
 	{#if cancellationRequests.length > 0}
 		<Card title="🔔 Solicitudes de Anulación" titleClass="title-amber" class="order-card">
@@ -190,7 +245,9 @@
 				>
 					<option value="all">Todos ({allOrders.length})</option>
 					<option value="pending">Pendientes ({allOrders.filter((o) => o.status === 'pending').length})</option>
+					<option value="in_delivery">En reparto ({allOrders.filter((o) => o.status === 'in_delivery').length})</option>
 					<option value="delivered">Entregados ({allOrders.filter((o) => o.status === 'delivered').length})</option>
+					<option value="returned">Devueltos ({allOrders.filter((o) => o.status === 'returned').length})</option>
 					<option value="cancelled">Cancelados ({allOrders.filter((o) => o.status === 'cancelled').length})</option>
 				</select>
 			</div>
@@ -246,7 +303,7 @@
 
 						<div class="order-info">
 							<p class="order-label">Creado</p>
-							<p class="order-value">{formatDate(order.createdAt)}</p>
+							<p class="order-value">{formatDateTime(order.createdAt)}</p>
 						</div>
 
 						<div class="order-info amount">
@@ -295,8 +352,31 @@
 								>
 									✗ Cancelar
 								</Button>
+								<Button variant="danger" size="sm" onclick={() => requestDeleteOrder(order)}>
+									🗑 Eliminar
+								</Button>
+							{:else if order.status === 'in_delivery'}
+								<Button
+									variant="primary"
+									size="sm"
+									onclick={() => deliverOrder(order.id)}
+								>
+									✓ Entregado
+								</Button>
+								<Button
+									variant="danger"
+									size="sm"
+									onclick={() => cancelOrder(order.id)}
+								>
+									✗ Cancelar
+								</Button>
 							{:else if order.status === 'delivered'}
-								<p class="status-text delivered">Entregado: {formatDate(order.deliveredAt)}</p>
+								<p class="status-text delivered">Entregado: {formatDateTime(order.deliveredAt)}</p>
+								<Button variant="secondary" size="sm" onclick={() => returnOrder(order.id)}>
+									↩ Marcar devuelto
+								</Button>
+							{:else if order.status === 'returned'}
+								<p class="status-text cancelled">Pedido devuelto por cliente</p>
 							{:else}
 								<p class="status-text cancelled">
 									{order.cancelSource === 'client' ? 'Cancelado por cliente' : 'Cancelado'}
@@ -304,6 +384,24 @@
 							{/if}
 						</div>
 					</div>
+
+					{#if deleteConfirmOpen && Number(pendingDeleteOrder.id) === Number(order.id)}
+						<div class="delete-confirm-banner" role="alert" aria-live="polite">
+							<div class="delete-confirm-content">
+								<p class="delete-confirm-title">Confirmar eliminación total</p>
+								<p class="delete-confirm-text">
+									Se eliminará el pedido <strong>#{order.id}</strong> del flujo operativo.
+								</p>
+								<p class="delete-confirm-warning">
+									Esta acción borra el pedido completamente del sistema.
+								</p>
+							</div>
+							<div class="delete-confirm-actions">
+								<Button variant="secondary" size="sm" onclick={closeDeleteOrderConfirm}>Cancelar</Button>
+								<Button variant="danger" size="sm" onclick={confirmDeleteOrder}>Sí, eliminar</Button>
+							</div>
+						</div>
+					{/if}
 				</Card>
 			{/each}
 		</div>
@@ -313,6 +411,8 @@
 		open={confirmOpen}
 		title={pendingOrderAction.type === 'deliver'
 			? 'Marcar Pedido como Entregado'
+			: pendingOrderAction.type === 'return'
+				? 'Marcar Pedido como Devuelto'
 			: pendingOrderAction.type === 'cancel'
 				? 'Cancelar Pedido'
 				: pendingOrderAction.type === 'approve-cancel-request'
@@ -320,6 +420,8 @@
 					: 'Denegar Solicitud de Anulación'}
 		message={pendingOrderAction.type === 'deliver'
 			? 'Se marcará el pedido como entregado.'
+			: pendingOrderAction.type === 'return'
+				? 'Se marcará el pedido como devuelto.'
 			: pendingOrderAction.type === 'cancel'
 				? 'Se cancelará el pedido. Esta acción no se puede deshacer.'
 				: pendingOrderAction.type === 'approve-cancel-request'
@@ -327,13 +429,15 @@
 					: 'Se mantendrá el pedido activo y se notificará al cliente.'}
 		confirmText={pendingOrderAction.type === 'deliver'
 			? 'Sí, marcar entregado'
+			: pendingOrderAction.type === 'return'
+				? 'Sí, marcar devuelto'
 			: pendingOrderAction.type === 'cancel'
 				? 'Sí, cancelar pedido'
 				: pendingOrderAction.type === 'approve-cancel-request'
 					? 'Sí, aceptar'
 					: 'Sí, denegar'}
 		cancelText="Volver"
-		variant={pendingOrderAction.type === 'deliver' || pendingOrderAction.type === 'approve-cancel-request' ? 'primary' : 'danger'}
+		variant={pendingOrderAction.type === 'deliver' || pendingOrderAction.type === 'return' || pendingOrderAction.type === 'approve-cancel-request' ? 'primary' : 'danger'}
 		onCancel={closeOrderConfirm}
 		onConfirm={confirmOrderAction}
 	/>
@@ -458,6 +562,73 @@
 		color: #94a3b8;
 		font-size: 1rem;
 		margin: 0;
+	}
+
+	.inline-error {
+		margin-bottom: 1rem;
+		padding: 0.75rem 1rem;
+		border-radius: 0.45rem;
+		border: 1px solid #7f1d1d;
+		background: #3f1d1d;
+		color: #fecaca;
+		font-size: 0.9rem;
+	}
+
+	.inline-success {
+		margin-bottom: 1rem;
+		padding: 0.75rem 1rem;
+		border-radius: 0.45rem;
+		border: 1px solid #14532d;
+		background: #052e1a;
+		color: #bbf7d0;
+		font-size: 0.9rem;
+	}
+
+	.delete-confirm-banner {
+		margin-bottom: 1rem;
+		padding: 1rem;
+		border-radius: 0.65rem;
+		border: 1px solid rgba(239, 68, 68, 0.45);
+		background:
+			radial-gradient(circle at top right, rgba(248, 113, 113, 0.2), transparent 46%),
+			linear-gradient(135deg, rgba(69, 10, 10, 0.75), rgba(63, 19, 19, 0.92));
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		gap: 1rem;
+		box-shadow: 0 10px 30px rgba(127, 29, 29, 0.2);
+	}
+
+	.delete-confirm-content {
+		display: flex;
+		flex-direction: column;
+		gap: 0.35rem;
+	}
+
+	.delete-confirm-title {
+		margin: 0;
+		font-size: 1rem;
+		font-weight: 700;
+		color: #fee2e2;
+	}
+
+	.delete-confirm-text {
+		margin: 0;
+		font-size: 0.9rem;
+		color: #fecaca;
+	}
+
+	.delete-confirm-warning {
+		margin: 0;
+		font-size: 0.85rem;
+		color: #fcd34d;
+	}
+
+	.delete-confirm-actions {
+		display: flex;
+		gap: 0.6rem;
+		align-items: center;
+		flex-wrap: wrap;
 	}
 
 	/* ============================================

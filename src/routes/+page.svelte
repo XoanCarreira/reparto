@@ -3,7 +3,7 @@
 	/**
 	 * PÁGINA DE LOGIN
 	 * Componente de autenticación que permite a usuarios entrar en el sistema
-	 * Valida email y contraseña contra los datos mock
+	 * Valida email y contraseña contra la base de datos
 	 */
 
 	import { goto } from '$app/navigation';
@@ -49,7 +49,7 @@
 
 		try {
 			// Intenta autenticar usando el store
-			const result = authStore.login(email, password);
+			const result = await authStore.login(email, password);
 
 			if (!result.success) {
 				error = result.error;
@@ -58,7 +58,7 @@
 			}
 
 			// Login exitoso - redirige según el rol
-			await new Promise((resolve) => setTimeout(resolve, 500)); // Simula pequeño delay
+			await new Promise((resolveTimeout) => setTimeout(resolveTimeout, 500)); // Simula pequeño delay
 
 			if (result.user.role === 'admin') {
 				await goto(resolve('/admin/dashboard'));
@@ -66,26 +66,13 @@
 				await goto(resolve('/client/orders'));
 			} else if (result.user.role === 'delivery') {
 				await goto(resolve('/delivery'));
+			} else {
+				error = 'Rol de usuario no reconocido.';
+				isSubmitting = false;
 			}
 		} catch {
 			error = 'Error al iniciar sesión. Por favor intenta nuevamente.';
 			isSubmitting = false;
-		}
-	}
-
-	/**
-	 * Llena el formulario con credenciales de prueba (para desarrollo)
-	 */
-	function fillTestCredentials(role = 'admin') {
-		if (role === 'admin') {
-			email = 'admin@empresa.com';
-			password = 'admin123';
-		} else if (role === 'delivery') {
-			email = 'repartidor201@empresa.com';
-			password = 'repartidor201';
-		} else {
-			email = 'cliente1@empresa.com';
-			password = 'cliente123';
 		}
 	}
 
@@ -163,40 +150,7 @@
 				</Button>
 			</form>
 
-			<!-- Credenciales de prueba para desarrollo -->
-			<div class="test-credentials">
-				<p class="test-credentials-title">Credenciales de prueba:</p>
-
-				<div class="test-credentials-list">
-					<button
-						type="button"
-						onclick={() => fillTestCredentials('admin')}
-						class="test-credential-btn test-credential-btn-admin"
-					>
-						👤 Admin: admin@empresa.com
-					</button>
-
-					<button
-						type="button"
-						onclick={() => fillTestCredentials('delivery')}
-						class="test-credential-btn test-credential-btn-delivery"
-					>
-						🚚 Repartidor: repartidor201@empresa.com
-					</button>
-
-					<button
-						type="button"
-						onclick={() => fillTestCredentials('client')}
-						class="test-credential-btn test-credential-btn-client"
-					>
-						🏪 Cliente: cliente1@empresa.com
-					</button>
-				</div>
-
-				<p class="test-credentials-note">
-					Admin: admin123 • Repartidor: repartidor201 • Cliente: cliente123
-				</p>
-			</div>
+			<p class="login-hint">Accede con un usuario registrado en la base de datos.</p>
 		</div>
 
 		<!-- Pie de página -->
@@ -308,69 +262,11 @@
 		margin-top: 1.5rem;
 	}
 
-	.test-credentials {
-		margin-top: 2rem;
-		padding-top: 1.5rem;
-		border-top: 1px solid #334155;
-	}
-
-	.test-credentials-title {
-		margin: 0 0 0.75rem;
+	.login-hint {
+		margin: 1rem 0 0;
 		font-size: 0.875rem;
-		font-weight: 600;
-		color: #cbd5e1;
-	}
-
-	.test-credentials-list {
-		display: grid;
-		gap: 0.5rem;
-	}
-
-	.test-credential-btn {
-		display: block;
-		width: 100%;
-		text-align: left;
-		font-size: 0.875rem;
-		padding: 0.5rem 0.75rem;
-		border-radius: 0.375rem;
-		transition: background-color 0.2s ease;
-		cursor: pointer;
-	}
-
-	.test-credential-btn-admin {
-		background: rgba(30, 58, 138, 0.35);
-		border: 1px solid rgba(37, 99, 235, 0.5);
-		color: #93c5fd;
-	}
-
-	.test-credential-btn-admin:hover {
-		background: rgba(30, 64, 175, 0.5);
-	}
-
-	.test-credential-btn-delivery {
-		background: rgba(124, 45, 18, 0.35);
-		border: 1px solid rgba(251, 146, 60, 0.5);
-		color: #fdba74;
-	}
-
-	.test-credential-btn-delivery:hover {
-		background: rgba(154, 52, 18, 0.5);
-	}
-
-	.test-credential-btn-client {
-		background: rgba(6, 95, 70, 0.35);
-		border: 1px solid rgba(16, 185, 129, 0.5);
-		color: #6ee7b7;
-	}
-
-	.test-credential-btn-client:hover {
-		background: rgba(6, 120, 85, 0.5);
-	}
-
-	.test-credentials-note {
-		margin: 0.5rem 0 0;
-		font-size: 0.75rem;
-		color: #64748b;
+		color: #94a3b8;
+		text-align: center;
 	}
 
 	.login-footer {

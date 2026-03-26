@@ -19,15 +19,18 @@
 		zonesStore,
 		productsStore
 	} from '$lib/stores/dataStore.js';
-	import { formatCurrency, formatDate, daysUntil } from '$lib/utils/helpers.js';
+	import { formatCurrency, formatDate, formatDateTime, daysUntil } from '$lib/utils/helpers.js';
 
 	let currentUser;
 	let allClients = $state([]);
 	let allZones = $state([]);
 	let allProducts = $state([]);
+	let allIncidents = $state([]);
 	let clientOrders = $state([]);
 	let pendingOrders = $state([]);
+	let inDeliveryOrders = $state([]);
 	let deliveredOrders = $state([]);
+	let returnedOrders = $state([]);
 	let nextDeliveryZone = $state(null);
 	let showIncidentModal = $state(false);
 	let showCancelConfirm = $state(false);
@@ -39,6 +42,7 @@
 		description: ''
 	});
 	let incidentSubmitting = $state(false);
+	let expandedIncidentOrders = $state({});
 	let showToast = $state(false);
 	let toastMessage = $state('');
 	let toastType = $state('success'); // 'success', 'error', 'info'
@@ -63,18 +67,28 @@
 		allProducts = $products;
 	});
 
+	incidentsStore.subscribe(($incidents) => {
+		allIncidents = $incidents;
+	});
+
 	// Se suscribe a órdenes
 	ordersStore.subscribe(($orders) => {
 		if (currentUser?.id) {
 			clientOrders = $orders.filter((o) => o.clientId === currentUser.id);
-			pendingOrders = clientOrders.filter((o) => o.status === 'pending' || o.status === 'in_delivery');
+			pendingOrders = clientOrders.filter((o) => o.status === 'pending');
+			inDeliveryOrders = clientOrders.filter((o) => o.status === 'in_delivery');
 			deliveredOrders = clientOrders.filter((o) => o.status === 'delivered');
+			returnedOrders = clientOrders.filter((o) => o.status === 'returned');
 		} else {
 			clientOrders = [];
 			pendingOrders = [];
+			inDeliveryOrders = [];
 			deliveredOrders = [];
+			returnedOrders = [];
 		}
 	});
+
+	const activeOrders = $derived([...inDeliveryOrders, ...pendingOrders]);
 
 	function refreshNextDeliveryZone() {
 		if (!currentUser?.id) {
@@ -90,14 +104,19 @@
 	/**
 	 * Calcula el total de pedidos pendientes
 	 */
-	function getPendingTotal() {
-		return pendingOrders.reduce((sum, order) => sum + order.totalAmount, 0);
+	function getActiveTotal() {
+		return activeOrders.reduce((sum, order) => sum + order.totalAmount, 0);
 	}
 
 	/**
 	 * Abre el modal para reportar incidencia
 	 */
 	function openIncidentModal(orderId) {
+		if (hasActiveIncident(orderId)) {
+			showToastMessage('Este pedido ya tiene una incidencia abierta.', 'info');
+			return;
+		}
+
 		selectedOrderId = orderId;
 		incidentForm = {
 			type: 'damaged',
@@ -113,12 +132,51 @@
 	function closeIncidentModal() {
 		showIncidentModal = false;
 		selectedOrderId = null;
+		incidentSubmitting = false;
 		incidentForm = { type: 'damaged', priority: 'medium', description: '' };
+	}
+
+	function getActiveIncidentForOrder(orderId) {
+		return (
+			allIncidents.find(
+				(incident) => Number(incident.orderId) === Number(orderId) && incident.status !== 'resolved'
+			) || null
+		);
+	}
+
+	function hasActiveIncident(orderId) {
+		return Boolean(getActiveIncidentForOrder(orderId));
+	}
+
+	function toggleIncidentDetails(orderId) {
+		expandedIncidentOrders = {
+			...expandedIncidentOrders,
+			[orderId]: !expandedIncidentOrders[orderId]
+		};
+	}
+
+	function getIncidentTypeLabel(type) {
+		const labels = {
+			damaged: 'Producto dañado',
+			delayed: 'Retraso en entrega',
+			wrong_quantity: 'Cantidad incorrecta',
+			other: 'Otro problema'
+		};
+		return labels[type] || 'Incidencia';
+	}
+
+	function getIncidentPriorityLabel(priority) {
+		const labels = {
+			low: 'Baja',
+			medium: 'Media',
+			high: 'Alta'
+		};
+		return labels[priority] || 'Media';
 	}
 
 	function canRequestCancellation(order) {
 		if (!order) return false;
-		if (order.status === 'delivered' || order.status === 'cancelled') return false;
+		if (order.status === 'delivered' || order.status === 'cancelled' || order.status === 'returned') return false;
 		return !order.cancelRequestStatus;
 	}
 
@@ -170,13 +228,25 @@
 		incidentSubmitting = true;
 
 		try {
-			incidentsStore.create(
+			const result = await incidentsStore.create(
 				selectedOrderId,
 				currentUser.id,
 				incidentForm.type,
 				incidentForm.description,
 				incidentForm.priority
 			);
+
+			if (!result?.ok && result?.reason === 'active-incident-exists') {
+				showToastMessage('Este pedido ya tiene una incidencia abierta.', 'info');
+				incidentSubmitting = false;
+				return;
+			}
+
+			if (!result?.ok && result?.reason === 'db-insert-failed') {
+				showToastMessage('No se pudo guardar la incidencia en base de datos.', 'error');
+				incidentSubmitting = false;
+				return;
+			}
 
 			showToastMessage('✓ Incidencia reportada correctamente. Nuestro equipo la revisará pronto.', 'success');
 			await new Promise((resolve) => setTimeout(resolve, 1500));
@@ -232,6 +302,13 @@
 	function getProductName(productId) {
 		const product = allProducts.find((item) => Number(item.id) === Number(productId));
 		return product?.name || `Producto #${productId}`;
+	}
+
+	function getIncidentStatusLabel(status) {
+		if (status === 'in_progress') return 'En progreso';
+		if (status === 'open') return 'Abierta';
+		if (status === 'resolved') return 'Resuelta';
+		return status;
 	}
 </script>
 
@@ -292,9 +369,9 @@
 	<div class="stats-grid stats-grid-3">
 		<div class="stat-card amber">
 			<div class="stat-content">
-				<div class="stat-value">{pendingOrders.length}</div>
-				<p class="stat-label">Pedidos Pendientes</p>
-				<p class="stat-meta">{formatCurrency(getPendingTotal())}</p>
+				<div class="stat-value">{activeOrders.length}</div>
+				<p class="stat-label">Pedidos Activos</p>
+				<p class="stat-meta">{formatCurrency(getActiveTotal())}</p>
 			</div>
 		</div>
 
@@ -319,15 +396,16 @@
 		<a href={resolve('/client/orders/new')} class="primary-link-btn">+ Crear Nuevo Pedido</a>
 	</div>
 
-	{#if pendingOrders.length > 0}
+	{#if activeOrders.length > 0}
 		<Card title="⏳ Pedidos Activos" titleClass="title-amber" class="card-section">
 			<div class="orders-list">
-				{#each pendingOrders as order (order.id)}
+				{#each activeOrders as order (order.id)}
+					{@const activeIncident = getActiveIncidentForOrder(order.id)}
 					<div class="order-card">
 						<div class="order-header">
 							<div>
 								<p class="order-id">Pedido #{order.id}</p>
-								<p class="order-date">{formatDate(order.createdAt)}</p>
+								<p class="order-date">{formatDateTime(order.createdAt)}</p>
 							</div>
 							<Badge status={order.status} />
 						</div>
@@ -347,7 +425,7 @@
 						<div class="order-summary-row">
 							<div>
 								<p class="summary-label">Entrega programada</p>
-								<p class="summary-value">{formatDate(order.scheduledDelivery)}</p>
+								<p class="summary-value">{formatDateTime(order.scheduledDelivery)}</p>
 							</div>
 							<div class="summary-total-box">
 								<p class="summary-label">Total</p>
@@ -365,9 +443,37 @@
 							</p>
 						{/if}
 
+						{#if activeIncident}
+							<div class="incident-open-box">
+								<button
+									type="button"
+									class="incident-open-toggle"
+									onclick={() => toggleIncidentDetails(order.id)}
+								>
+									<span>⚠️ Incidencia abierta</span>
+									<span>{expandedIncidentOrders[order.id] ? 'Ocultar detalle' : 'Ver detalle'}</span>
+								</button>
+
+								{#if expandedIncidentOrders[order.id]}
+									<div class="incident-open-details">
+										<p><strong>Tipo:</strong> {getIncidentTypeLabel(activeIncident.type)}</p>
+										<p><strong>Estado:</strong> {getIncidentStatusLabel(activeIncident.status)}</p>
+										<p><strong>Prioridad:</strong> {getIncidentPriorityLabel(activeIncident.priority)}</p>
+										<p><strong>Reportada:</strong> {formatDate(activeIncident.reportedAt)}</p>
+										<p><strong>Detalle:</strong> {activeIncident.description}</p>
+									</div>
+								{/if}
+							</div>
+						{/if}
+
 						<div class="pending-actions">
-							<Button variant="danger" size="sm" onclick={() => openIncidentModal(order.id)}>
-								⚠️ Reportar Problema
+							<Button
+								variant="danger"
+								size="sm"
+								onclick={() => openIncidentModal(order.id)}
+								disabled={hasActiveIncident(order.id)}
+							>
+								{hasActiveIncident(order.id) ? 'Incidencia abierta' : '⚠️ Reportar Problema'}
 							</Button>
 							{#if canRequestCancellation(order)}
 								<Button variant="secondary" size="sm" onclick={() => openCancelRequest(order.id)}>
@@ -385,11 +491,12 @@
 		<Card title="✅ Historial de Entregas" titleClass="title-emerald" class="card-section">
 			<div class="delivered-list">
 				{#each deliveredOrders.slice(0, 5) as order (order.id)}
+					{@const activeIncident = getActiveIncidentForOrder(order.id)}
 					<div class="delivered-card">
 						<div>
 							<p class="order-id order-id-compact">Pedido #{order.id}</p>
 							<p class="order-date">
-								{countItems(order.items)} items • {formatDate(order.deliveredAt || order.createdAt)}
+								{countItems(order.items)} items • {formatDateTime(order.deliveredAt || order.createdAt)}
 							</p>
 							<div class="order-items-list delivered-items-list">
 								{#each order.items as item (item.productId)}
@@ -399,14 +506,41 @@
 									</p>
 								{/each}
 							</div>
+
+							{#if activeIncident}
+								<div class="incident-open-box compact">
+									<button
+										type="button"
+										class="incident-open-toggle"
+										onclick={() => toggleIncidentDetails(order.id)}
+									>
+										<span>⚠️ Incidencia abierta</span>
+										<span>{expandedIncidentOrders[order.id] ? 'Ocultar detalle' : 'Ver detalle'}</span>
+									</button>
+									{#if expandedIncidentOrders[order.id]}
+										<div class="incident-open-details">
+											<p><strong>Tipo:</strong> {getIncidentTypeLabel(activeIncident.type)}</p>
+											<p><strong>Estado:</strong> {getIncidentStatusLabel(activeIncident.status)}</p>
+											<p><strong>Prioridad:</strong> {getIncidentPriorityLabel(activeIncident.priority)}</p>
+											<p><strong>Reportada:</strong> {formatDate(activeIncident.reportedAt)}</p>
+											<p><strong>Detalle:</strong> {activeIncident.description}</p>
+										</div>
+									{/if}
+								</div>
+							{/if}
 						</div>
 						<div class="delivered-actions">
 							<div class="summary-total-box">
 								<p class="summary-value">{formatCurrency(order.totalAmount)}</p>
 								<Badge status={order.status} />
 							</div>
-							<Button variant="secondary" size="sm" onclick={() => openIncidentModal(order.id)}>
-								⚠️ Reportar
+							<Button
+								variant="secondary"
+								size="sm"
+								onclick={() => openIncidentModal(order.id)}
+								disabled={hasActiveIncident(order.id)}
+							>
+								{hasActiveIncident(order.id) ? 'Incidencia abierta' : '⚠️ Reportar'}
 							</Button>
 						</div>
 					</div>
@@ -426,12 +560,34 @@
 					<div class="delivered-card">
 						<div>
 							<p class="order-id order-id-compact">Pedido #{order.id}</p>
-							<p class="order-date">{formatDate(order.cancelDecisionAt || order.createdAt)}</p>
+							<p class="order-date">{formatDateTime(order.cancelDecisionAt || order.createdAt)}</p>
 							<p class="cancel-request-note">
 								{order.cancelSource === 'client'
 									? 'Cancelado por cliente (aprobado por administración).'
 									: 'Cancelado por administración.'}
 							</p>
+						</div>
+						<div class="delivered-actions">
+							<div class="summary-total-box">
+								<p class="summary-value">{formatCurrency(order.totalAmount)}</p>
+								<Badge status={order.status} />
+							</div>
+						</div>
+					</div>
+				{/each}
+			</div>
+		</Card>
+	{/if}
+
+	{#if returnedOrders.length > 0}
+		<Card title="↩ Pedidos Devueltos" titleClass="title-amber" class="card-section">
+			<div class="delivered-list">
+				{#each returnedOrders as order (order.id)}
+					<div class="delivered-card">
+						<div>
+							<p class="order-id order-id-compact">Pedido #{order.id}</p>
+							<p class="order-date">{formatDateTime(order.deliveredAt || order.createdAt)}</p>
+							<p class="cancel-request-note pending">Pedido marcado como devuelto por administración.</p>
 						</div>
 						<div class="delivered-actions">
 							<div class="summary-total-box">
@@ -839,6 +995,47 @@
 		display: flex;
 		gap: 0.6rem;
 		flex-wrap: wrap;
+	}
+
+	.incident-open-box {
+		margin: 0 0 0.85rem;
+		padding: 0.65rem 0.75rem;
+		background: rgba(239, 68, 68, 0.09);
+		border: 1px solid rgba(239, 68, 68, 0.35);
+		border-radius: 0.4rem;
+	}
+
+	.incident-open-box.compact {
+		margin-top: 0.75rem;
+		margin-bottom: 0;
+	}
+
+	.incident-open-toggle {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		width: 100%;
+		padding: 0;
+		background: transparent;
+		border: 0;
+		color: #fecaca;
+		font-size: 0.82rem;
+		font-weight: 700;
+		cursor: pointer;
+	}
+
+	.incident-open-details {
+		margin-top: 0.6rem;
+		padding-top: 0.55rem;
+		border-top: 1px solid rgba(239, 68, 68, 0.35);
+		display: grid;
+		gap: 0.25rem;
+		font-size: 0.82rem;
+		color: #fecaca;
+	}
+
+	.incident-open-details p {
+		margin: 0;
 	}
 
 	.cancel-request-note {
