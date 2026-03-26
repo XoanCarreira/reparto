@@ -6,13 +6,11 @@
 	 * - Si está autenticado: muestra el layout con navegación según el rol
 	 */
 
-	import favicon from '$lib/assets/favicon.svg';
-
 	let { children } = $props();
 </script>
 
 <svelte:head>
-	<link rel="icon" href={favicon} />
+	<link rel="icon" href="/logo_repartoapp_192.png" />
 	<title>Reparto - Sistema de Entregas</title>
 	<meta name="description" content="Sistema de gestión de entregas para empresas" />
 	<meta name="viewport" content="width=device-width, initial-scale=1" />

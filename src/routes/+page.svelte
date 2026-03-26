@@ -94,7 +94,8 @@
 	<div class="login-shell">
 		<!-- Encabezado -->
 		<div class="login-header animate-fadeIn">
-			<h1 class="login-title">📦 Reparto</h1>
+			<img src="logo_repartoapp_192.png" alt="Logo de RepartoAPP" />
+			<h1 class="login-title">RepartoAPP</h1>
 			<p class="login-subtitle">Sistema de Gestión de Entregas</p>
 		</div>
 
@@ -109,7 +110,13 @@
 				</div>
 			{/if}
 
-			<form onsubmit={(e) => { e.preventDefault(); handleLogin(); }} class="login-form">
+			<form
+				onsubmit={(e) => {
+					e.preventDefault();
+					handleLogin();
+				}}
+				class="login-form"
+			>
 				<!-- Campo Email -->
 				<InputField
 					label="Email"
@@ -154,9 +161,7 @@
 		</div>
 
 		<!-- Pie de página -->
-		<p class="login-footer">
-			Sistema de entregas seguro y escalable para tu negocio
-		</p>
+		<p class="login-footer">Sistema de entregas seguro y escalable para tu negocio</p>
 	</div>
 </div>
 

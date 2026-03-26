@@ -217,9 +217,36 @@ function createAuthStore() {
 				});
 
 				if (updateError) {
+					const message = String(updateError.message || '').toLowerCase();
+					if (message.includes('same password') || message.includes('should be different')) {
+						return {
+							success: false,
+							error: 'La nueva contraseña debe ser diferente de la actual'
+						};
+					}
+					if (message.includes('pwned') || message.includes('leaked') || message.includes('compromised')) {
+						return {
+							success: false,
+							error: 'La nueva contraseña aparece filtrada. Elige una más segura.'
+						};
+					}
 					return {
 						success: false,
 						error: updateError.message || 'No se pudo actualizar la contraseña'
+					};
+				}
+
+				// Verifica que la nueva contraseña quedó activa para evitar bloqueos silenciosos.
+				const { error: verifyError } = await supabaseClient.auth.signInWithPassword({
+					email: sessionUser.email,
+					password: normalizedNewPassword
+				});
+
+				if (verifyError) {
+					return {
+						success: false,
+						error:
+							'La contraseña no pudo verificarse tras el cambio. Intenta nuevamente para evitar bloqueos.'
 					};
 				}
 

@@ -9,13 +9,11 @@
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { authStore } from '$lib/stores/authStore.js';
-	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 
 	// Estado del menú en dispositivos móviles
 	let mobileMenuOpen = $state(false);
 	let currentUser = $state(null);
 	let changePasswordOpen = $state(false);
-	let confirmChangePasswordOpen = $state(false);
 	let currentPassword = $state('');
 	let newPassword = $state('');
 	let confirmPassword = $state('');
@@ -70,7 +68,6 @@
 			return;
 		}
 		changePasswordOpen = false;
-		confirmChangePasswordOpen = false;
 		passwordError = '';
 	}
 
@@ -99,16 +96,25 @@
 		return true;
 	}
 
-	function requestPasswordChange() {
+	async function requestPasswordChange() {
 		passwordSuccess = '';
 		if (!validatePasswordForm()) {
 			return;
 		}
-		confirmChangePasswordOpen = true;
+
+		if (typeof window !== 'undefined') {
+			const confirmed = window.confirm(
+				'Esta acción actualizará tu credencial de acceso. ¿Deseas continuar?'
+			);
+			if (!confirmed) {
+				return;
+			}
+		}
+
+		await confirmPasswordChange();
 	}
 
 	async function confirmPasswordChange() {
-		confirmChangePasswordOpen = false;
 		isChangingPassword = true;
 		passwordError = '';
 
@@ -355,9 +361,9 @@
 			</p>
 
 			<form
-				onsubmit={(event) => {
+				onsubmit={async (event) => {
 					event.preventDefault();
-					requestPasswordChange();
+					await requestPasswordChange();
 				}}
 				class="password-form"
 			>
@@ -410,17 +416,6 @@
 		</div>
 	</div>
 {/if}
-
-<ConfirmDialog
-	open={confirmChangePasswordOpen}
-	title="Confirmar cambio de contraseña"
-	message="Esta acción actualizará tu credencial de acceso. ¿Deseas continuar?"
-	confirmText="Sí, cambiar"
-	cancelText="Cancelar"
-	variant="warning"
-	onCancel={() => (confirmChangePasswordOpen = false)}
-	onConfirm={confirmPasswordChange}
-/>
 
 <style>
 	.navbar {
