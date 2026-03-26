@@ -6,7 +6,6 @@
 
 import { writable } from 'svelte/store';
 import {
-	fetchAuthUserDb,
 	fetchProfileByAuthUserIdDb,
 	isDatabaseEnabled
 } from '../utils/supabaseDb.js';
@@ -58,34 +57,7 @@ function createAuthStore() {
 				authData = data;
 				authError = error;
 
-				if (error && isDatabaseEnabled) {
-					// Bridge: si el usuario existe en public.users pero no en auth.users,
-					// lo provisionamos en Auth en el primer login con sus credenciales válidas.
-					let legacyUser = null;
-					try {
-						legacyUser = await fetchAuthUserDb(normalizedEmail, normalizedPassword);
-					} catch (legacyError) {
-						console.error('No se pudo validar usuario legado en bridge auth:', legacyError);
-					}
-					if (legacyUser) {
-						const { error: signUpError } = await supabaseClient.auth.signUp({
-							email: normalizedEmail,
-							password: normalizedPassword
-						});
-
-						// Si ya está registrado, continuamos con login normal.
-						if (signUpError && signUpError.message !== 'User already registered') {
-							console.error('No se pudo crear cuenta en Supabase Auth:', signUpError);
-						}
-
-						const retried = await supabaseClient.auth.signInWithPassword({
-							email: normalizedEmail,
-							password: normalizedPassword
-						});
-						authData = retried.data;
-						authError = retried.error;
-					}
-				}
+				// No se hace auto-signup en login por seguridad.
 
 				if (authError) {
 					return { success: false, error: 'Email o contraseña incorrectos' };

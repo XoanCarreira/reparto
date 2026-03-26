@@ -12,6 +12,8 @@ import {
 	fetchOrdersDb,
 	insertOrderWithItemsDb,
 	patchOrderDb,
+	deleteOrderDb,
+	deleteCancelledOrdersByClientDb,
 	fetchProductsDb,
 	upsertProductDb,
 	deleteProductDb,
@@ -392,6 +394,7 @@ function createClientsStore() {
 					password: payload.password?.trim() || '',
 					name: payload.name?.trim() || `Cliente ${newClientId}`,
 					role: 'client',
+					isActive: true,
 					zone: Number(payload.zone) || firstZone,
 					phone: payload.phone?.trim() || '',
 					address: payload.address?.trim() || '',
@@ -433,6 +436,8 @@ function createClientsStore() {
 						email: typeof updates.email === 'string' ? updates.email.trim() : client.email,
 						password: typeof updates.password === 'string' ? updates.password.trim() : client.password,
 						name: typeof updates.name === 'string' ? updates.name.trim() : client.name,
+						isActive:
+							typeof updates.isActive === 'boolean' ? updates.isActive : (client.isActive !== false),
 						zone: Number.isFinite(Number(updates.zone)) ? Number(updates.zone) : client.zone,
 						phone: typeof updates.phone === 'string' ? updates.phone.trim() : (client.phone ?? ''),
 						address:
@@ -461,26 +466,120 @@ function createClientsStore() {
 							typeof updates.password === 'string' && updates.password.trim().length > 0;
 
 						if (emailChanged || passwordChanged) {
-							try {
-								await syncAuthUserCredentialsDb(
-									previousClient?.email,
-									updatedClient.email,
-									passwordChanged ? updates.password : ''
+							const syncResult = await syncAuthUserCredentialsDb(
+								previousClient?.email,
+								updatedClient.email,
+								passwordChanged ? updates.password : ''
+							);
+
+							if (syncResult?.ok === false && syncResult.reason === 'missing-explicit-password') {
+								console.warn(
+									'Sincronización Auth omitida para cliente: requiere contraseña explícita al cambiar credenciales.'
 								);
-							} catch (error) {
-								console.error('No se pudo sincronizar credenciales Auth de cliente:', error);
 							}
 						}
 					})
 					.catch((error) => console.error('No se pudo actualizar el cliente en Supabase:', error));
 			}
 		},
-		remove: (clientId) => {
-			update((clients) => clients.filter((client) => Number(client.id) !== Number(clientId)));
+		remove: async (clientId) => {
+			const clientOrders = ordersStore.getByClient(clientId);
+			const blockedOrders = clientOrders.filter(
+				(order) => order.status !== 'cancelled' && order.status !== 'returned'
+			);
+
+			if (blockedOrders.length > 0) {
+				// No se puede borrar cliente si conserva pedidos activos, en reparto o entregados.
+				return {
+					success: false,
+					reason: 'has_non_cancelled_orders',
+					error: 'El cliente tiene pedidos no cancelados asociados'
+				};
+			}
+
+			const purgeableOrders = clientOrders.filter(
+				(order) => order.status === 'cancelled' || order.status === 'returned'
+			);
+
 			if (isDatabaseEnabled) {
-				void deleteClientDb(clientId).catch((error) =>
-					console.error('No se pudo eliminar el cliente en Supabase:', error)
+				try {
+					if (purgeableOrders.length > 0) {
+						await deleteCancelledOrdersByClientDb(clientId);
+					}
+
+					await deleteClientDb(clientId);
+				} catch (error) {
+					console.error('No se pudo eliminar el cliente en Supabase:', error);
+					return { success: false, error: error?.message || 'No se pudo eliminar en base de datos' };
+				}
+			}
+
+			if (purgeableOrders.length > 0) {
+				ordersStore.pruneClosedByClient(clientId);
+			}
+
+			update((clients) => clients.filter((client) => Number(client.id) !== Number(clientId)));
+			return { success: true, deletedClosedOrders: purgeableOrders.length };
+		},
+		setActive: async (clientId, isActive) => {
+			let targetClient = null;
+
+			subscribe((clients) => {
+				targetClient = clients.find((client) => Number(client.id) === Number(clientId)) || null;
+			})();
+
+			if (!targetClient) {
+				return { success: false, error: 'Cliente no encontrado' };
+			}
+
+			const updatedClient = { ...targetClient, isActive: Boolean(isActive) };
+
+			if (isDatabaseEnabled) {
+				try {
+					await upsertClientDb(updatedClient);
+				} catch (error) {
+					console.error('No se pudo actualizar estado activo del cliente en Supabase:', error);
+					return {
+						success: false,
+						error: error?.message || 'No se pudo actualizar estado del cliente'
+					};
+				}
+			}
+
+			update((clients) =>
+				clients.map((client) =>
+					Number(client.id) === Number(clientId) ? { ...client, isActive: Boolean(isActive) } : client
+				)
+			);
+
+			return { success: true };
+		},
+		syncCredentials: async (clientId, nextEmail, nextPassword = '') => {
+			let targetClient = null;
+
+			subscribe((clients) => {
+				targetClient = clients.find((client) => Number(client.id) === Number(clientId)) || null;
+			})();
+
+			if (!targetClient) {
+				return { success: false, reason: 'client-not-found' };
+			}
+
+			try {
+				const syncResult = await syncAuthUserCredentialsDb(
+					targetClient.email,
+					nextEmail,
+					nextPassword
 				);
+
+				if (syncResult?.ok === false && syncResult.reason === 'missing-explicit-password') {
+					return { success: false, reason: 'missing-explicit-password' };
+				}
+
+				return { success: true };
+			} catch (error) {
+				console.error('No se pudo sincronizar credenciales Auth de cliente:', error);
+				return { success: false, reason: 'sync-failed' };
 			}
 		}
 	};
@@ -714,6 +813,32 @@ function createOrdersStore() {
 				}
 			}
 		},
+		deletePermanent: async (orderId) => {
+			// Borrado real: elimina pedido e items relacionados (FK cascade en order_items).
+			if (isDatabaseEnabled) {
+				try {
+					await deleteOrderDb(orderId);
+				} catch (error) {
+					console.error('No se pudo eliminar pedido permanentemente en Supabase:', error);
+					return { success: false, error: error?.message || 'No se pudo eliminar pedido' };
+				}
+			}
+
+			update((orders) => orders.filter((order) => Number(order.id) !== Number(orderId)));
+			return { success: true };
+		},
+		pruneClosedByClient: (clientId) => {
+			// Se usa al eliminar cliente: limpia pedidos cerrados (cancelados/devueltos) ya purgados en DB.
+			update((orders) =>
+				orders.filter(
+					(order) =>
+					!(
+						Number(order.clientId) === Number(clientId) &&
+						(order.status === 'cancelled' || order.status === 'returned')
+					)
+				)
+			);
+		},
 		getPending: () => {
 			let pendingOrders = [];
 			subscribe((orders) => {
@@ -771,10 +896,31 @@ function createIncidentsStore() {
 			})();
 			return openIncidents;
 		},
-		create: (orderId, clientId, type, description, priority = 'medium') => {
+		getActiveByOrderId: (orderId) => {
+			let incident = null;
+			subscribe((incidents) => {
+				incident =
+					incidents.find(
+						(i) => Number(i.orderId) === Number(orderId) && String(i.status) !== 'resolved'
+					) || null;
+			})();
+			return incident;
+		},
+		create: async (orderId, clientId, type, description, priority = 'medium') => {
 			let newIncident = null;
+			let result = { ok: false, reason: 'unknown', incident: null };
 
 			update((incidents) => {
+				const activeIncident = incidents.find(
+					(incident) =>
+						Number(incident.orderId) === Number(orderId) && String(incident.status) !== 'resolved'
+				);
+
+				if (activeIncident) {
+					result = { ok: false, reason: 'active-incident-exists', incident: activeIncident };
+					return incidents;
+				}
+
 				const maxId = Math.max(...incidents.map((i) => Number(i.id)), 300);
 				newIncident = {
 					id: maxId + 1,
@@ -787,14 +933,21 @@ function createIncidentsStore() {
 					resolvedAt: null,
 					priority
 				};
+				result = { ok: true, reason: null, incident: newIncident };
 				return [...incidents, newIncident];
 			});
 
 			if (isDatabaseEnabled && newIncident) {
-				void insertIncidentDb(newIncident).catch((error) =>
-					console.error('No se pudo crear incidencia en Supabase:', error)
-				);
+				try {
+					await insertIncidentDb(newIncident);
+				} catch (error) {
+					console.error('No se pudo crear incidencia en Supabase:', error);
+					update((incidents) => incidents.filter((incident) => Number(incident.id) !== Number(newIncident.id)));
+					return { ok: false, reason: 'db-insert-failed', incident: null };
+				}
 			}
+
+			return result;
 		},
 		resolve: (incidentId) => {
 			const resolvedAt = new Date();

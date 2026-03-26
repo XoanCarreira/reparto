@@ -38,16 +38,22 @@
 
 	.badge.status-delivered,
 	.badge.status-resolved,
-	.badge.status-active,
-	.badge.status-low {
+	.badge.status-active{
 		background: rgba(5, 150, 105, 0.25);
 		color: #6ee7b7;
 		border-color: rgba(16, 185, 129, 0.55);
 	}
 
+	.badge.status-returned {
+		background: rgba(217, 119, 6, 0.22);
+		color: #fcd34d;
+		border-color: rgba(217, 119, 6, 0.5);
+	}
+
 	.badge.status-cancelled,
 	.badge.status-open,
-	.badge.status-high {
+	.badge.status-high,
+	.badge.status-low {
 		background: rgba(185, 28, 28, 0.25);
 		color: #fca5a5;
 		border-color: rgba(220, 38, 38, 0.55);

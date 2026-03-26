@@ -3,14 +3,14 @@
  * Central data source for all app entities.
  */
 
-import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY } from '$env/static/public';
+import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_PUBLISHABLE_KEY } from '$env/static/public';
 import { supabaseClient } from './supabaseClient.js';
 
 const SUPABASE_URL = PUBLIC_SUPABASE_URL || import.meta.env.PUBLIC_SUPABASE_URL || '';
-const SUPABASE_ANON_KEY =
-	PUBLIC_SUPABASE_ANON_KEY || import.meta.env.PUBLIC_SUPABASE_ANON_KEY || '';
+const SUPABASE_PUBLISHABLE_KEY =
+	PUBLIC_SUPABASE_PUBLISHABLE_KEY || import.meta.env.PUBLIC_SUPABASE_PUBLISHABLE_KEY || '';
 
-export const isDatabaseEnabled = Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
+export const isDatabaseEnabled = Boolean(SUPABASE_URL && SUPABASE_PUBLISHABLE_KEY);
 
 function buildUrl(path) {
 	return `${SUPABASE_URL}/rest/v1/${path}`;
@@ -25,7 +25,7 @@ async function request(path, options = {}) {
 		return null;
 	}
 
-	let bearerToken = SUPABASE_ANON_KEY;
+	let bearerToken = SUPABASE_PUBLISHABLE_KEY;
 	if (supabaseClient) {
 		try {
 			const {
@@ -40,7 +40,7 @@ async function request(path, options = {}) {
 	}
 
 	const headers = {
-		apikey: SUPABASE_ANON_KEY,
+		apikey: SUPABASE_PUBLISHABLE_KEY,
 		Authorization: `Bearer ${bearerToken}`,
 		'Content-Type': 'application/json',
 		...options.headers
@@ -76,6 +76,7 @@ function mapClientRow(row) {
 		password: '',
 		name: row.name || '',
 		role: 'client',
+		isActive: row.isActive !== false,
 		zone: Number(row.zone) || 1,
 		phone: row.phone || '',
 		address: row.address || '',
@@ -222,6 +223,7 @@ export async function upsertClientDb(client) {
 		email: client.email,
 		name: client.name,
 		role: 'client',
+		is_active: client.isActive !== false,
 		zone_id: client.zone,
 		phone: client.phone || null,
 		address: client.address || null,
@@ -306,6 +308,23 @@ export async function patchOrderDb(orderId, patch) {
 	});
 }
 
+export async function deleteOrderDb(orderId) {
+	await request(`orders?id=eq.${encodeURIComponent(orderId)}`, {
+		method: 'DELETE',
+		headers: { Prefer: 'return=minimal' }
+	});
+}
+
+export async function deleteCancelledOrdersByClientDb(clientId) {
+	await request(
+		`orders?client_id=eq.${encodeURIComponent(clientId)}&status=in.(cancelled,returned)`,
+		{
+			method: 'DELETE',
+			headers: { Prefer: 'return=minimal' }
+		}
+	);
+}
+
 export async function fetchProductsDb() {
 	const rows = await request('products?select=*&order=id.asc');
 	return Array.isArray(rows) ? rows.map(mapProductRow) : [];
@@ -370,6 +389,14 @@ export async function fetchIncidentsDb() {
 }
 
 export async function insertIncidentDb(incident) {
+	const activeRows = await request(
+		`incidents?select=id,status&order_id=eq.${encodeURIComponent(incident.orderId)}&status=in.(open,in_progress)&limit=1`
+	);
+
+	if (Array.isArray(activeRows) && activeRows.length > 0) {
+		throw new Error('Ya existe una incidencia activa para este pedido');
+	}
+
 	await request('incidents', {
 		method: 'POST',
 		headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
@@ -450,8 +477,8 @@ export async function ensureAuthUserExistsDb(email, password) {
 	const response = await fetch(buildAuthUrl('signup'), {
 		method: 'POST',
 		headers: {
-			apikey: SUPABASE_ANON_KEY,
-			Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+			apikey: SUPABASE_PUBLISHABLE_KEY,
+			Authorization: `Bearer ${SUPABASE_PUBLISHABLE_KEY}`,
 			'Content-Type': 'application/json'
 		},
 		body: JSON.stringify({
@@ -486,13 +513,22 @@ export async function syncAuthUserCredentialsDb(currentEmail, nextEmail, nextPas
 	}
 
 	const emailToUse = normalizedNextEmail || normalizedCurrentEmail;
+	const emailChanged = normalizedCurrentEmail !== emailToUse;
+
+	// Seguridad: nunca crear cuentas con contraseñas por defecto.
+	if (!normalizedNextPassword) {
+		return { ok: false, skipped: true, reason: 'missing-explicit-password' };
+	}
 
 	// Ensure account exists first (idempotent if already present).
-	await ensureAuthUserExistsDb(emailToUse, normalizedNextPassword || 'TempPass#12345');
+	const ensureResult = await ensureAuthUserExistsDb(emailToUse, normalizedNextPassword);
+	if (!ensureResult?.ok) {
+		return ensureResult;
+	}
 
-	if (normalizedCurrentEmail !== emailToUse) {
+	if (emailChanged) {
 		// There is no admin auth API here; create the target identity and leave old one untouched.
-		await ensureAuthUserExistsDb(emailToUse, normalizedNextPassword || 'TempPass#12345');
+		await ensureAuthUserExistsDb(emailToUse, normalizedNextPassword);
 	}
 
 	if (normalizedNextPassword) {
@@ -500,8 +536,8 @@ export async function syncAuthUserCredentialsDb(currentEmail, nextEmail, nextPas
 		const response = await fetch(buildAuthUrl('recover'), {
 			method: 'POST',
 			headers: {
-				apikey: SUPABASE_ANON_KEY,
-				Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+				apikey: SUPABASE_PUBLISHABLE_KEY,
+				Authorization: `Bearer ${SUPABASE_PUBLISHABLE_KEY}`,
 				'Content-Type': 'application/json'
 			},
 			body: JSON.stringify({ email: emailToUse })
