@@ -153,6 +153,88 @@ function createAuthStore() {
 		},
 
 		/**
+		 * Cambia la contraseña del usuario autenticado
+		 * - Verifica contraseña actual para evitar bloqueos por error tipográfico
+		 * - Requiere confirmación de la nueva contraseña
+		 * @param {object} params
+		 * @param {string} params.currentPassword
+		 * @param {string} params.newPassword
+		 * @param {string} params.confirmPassword
+		 * @returns {object} - { success: boolean, error?: string, message?: string }
+		 */
+		changePassword: async ({ currentPassword, newPassword, confirmPassword }) => {
+			if (!isSupabaseAuthEnabled || !supabaseClient) {
+				return { success: false, error: 'Supabase Auth no está configurado' };
+			}
+
+			const normalizedCurrentPassword = String(currentPassword || '');
+			const normalizedNewPassword = String(newPassword || '');
+			const normalizedConfirmPassword = String(confirmPassword || '');
+
+			if (!normalizedCurrentPassword) {
+				return { success: false, error: 'Debes indicar tu contraseña actual' };
+			}
+
+			if (normalizedNewPassword.length < 8) {
+				return {
+					success: false,
+					error: 'La nueva contraseña debe tener al menos 8 caracteres'
+				};
+			}
+
+			if (normalizedNewPassword !== normalizedConfirmPassword) {
+				return { success: false, error: 'La confirmación no coincide con la nueva contraseña' };
+			}
+
+			if (normalizedCurrentPassword === normalizedNewPassword) {
+				return {
+					success: false,
+					error: 'La nueva contraseña debe ser diferente de la contraseña actual'
+				};
+			}
+
+			try {
+				const {
+					data: { user: sessionUser }
+				} = await supabaseClient.auth.getUser();
+
+				if (!sessionUser?.email) {
+					return { success: false, error: 'No se pudo verificar la sesión actual' };
+				}
+
+				// Reautenticación para confirmar que la contraseña actual es correcta.
+				const { error: reauthError } = await supabaseClient.auth.signInWithPassword({
+					email: sessionUser.email,
+					password: normalizedCurrentPassword
+				});
+
+				if (reauthError) {
+					return { success: false, error: 'La contraseña actual es incorrecta' };
+				}
+
+				const { error: updateError } = await supabaseClient.auth.updateUser({
+					password: normalizedNewPassword
+				});
+
+				if (updateError) {
+					return {
+						success: false,
+						error: updateError.message || 'No se pudo actualizar la contraseña'
+					};
+				}
+
+				store.resetSessionTimeout();
+				return { success: true, message: 'Contraseña actualizada correctamente' };
+			} catch (error) {
+				console.error('Error cambiando contraseña:', error);
+				return {
+					success: false,
+					error: 'No se pudo actualizar la contraseña. Intenta nuevamente.'
+				};
+			}
+		},
+
+		/**
 		 * Reinicia el timer de timeout de sesión
 		 */
 		resetSessionTimeout() {

@@ -9,10 +9,19 @@
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { authStore } from '$lib/stores/authStore.js';
+	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 
 	// Estado del menú en dispositivos móviles
 	let mobileMenuOpen = $state(false);
 	let currentUser = $state(null);
+	let changePasswordOpen = $state(false);
+	let confirmChangePasswordOpen = $state(false);
+	let currentPassword = $state('');
+	let newPassword = $state('');
+	let confirmPassword = $state('');
+	let passwordError = $state('');
+	let passwordSuccess = $state('');
+	let isChangingPassword = $state(false);
 
 	// Se suscribe a cambios de autenticación
 	authStore.subscribe((user) => {
@@ -47,6 +56,79 @@
 		if (role === 'client') return 'Cliente';
 		if (role === 'delivery') return 'Repartidor';
 		return 'Usuario';
+	}
+
+	function openChangePassword() {
+		mobileMenuOpen = false;
+		passwordError = '';
+		passwordSuccess = '';
+		changePasswordOpen = true;
+	}
+
+	function closeChangePassword() {
+		if (isChangingPassword) {
+			return;
+		}
+		changePasswordOpen = false;
+		confirmChangePasswordOpen = false;
+		passwordError = '';
+	}
+
+	function validatePasswordForm() {
+		if (!currentPassword || !newPassword || !confirmPassword) {
+			passwordError = 'Todos los campos son obligatorios';
+			return false;
+		}
+
+		if (newPassword.length < 8) {
+			passwordError = 'La nueva contraseña debe tener al menos 8 caracteres';
+			return false;
+		}
+
+		if (newPassword !== confirmPassword) {
+			passwordError = 'La confirmación no coincide con la nueva contraseña';
+			return false;
+		}
+
+		if (currentPassword === newPassword) {
+			passwordError = 'La nueva contraseña debe ser diferente de la actual';
+			return false;
+		}
+
+		passwordError = '';
+		return true;
+	}
+
+	function requestPasswordChange() {
+		passwordSuccess = '';
+		if (!validatePasswordForm()) {
+			return;
+		}
+		confirmChangePasswordOpen = true;
+	}
+
+	async function confirmPasswordChange() {
+		confirmChangePasswordOpen = false;
+		isChangingPassword = true;
+		passwordError = '';
+
+		const result = await authStore.changePassword({
+			currentPassword,
+			newPassword,
+			confirmPassword
+		});
+
+		isChangingPassword = false;
+
+		if (!result.success) {
+			passwordError = result.error || 'No se pudo cambiar la contraseña';
+			return;
+		}
+
+		passwordSuccess = result.message || 'Contraseña actualizada correctamente';
+		currentPassword = '';
+		newPassword = '';
+		confirmPassword = '';
 	}
 </script>
 
@@ -142,6 +224,13 @@
 				</div>
 
 				<button
+					onclick={openChangePassword}
+					class="navbar-password-btn"
+				>
+					Contraseña
+				</button>
+
+				<button
 					onclick={handleLogout}
 					class="navbar-logout"
 				>
@@ -234,6 +323,13 @@
 
 					<div class="navbar-mobile-divider">
 						<button
+							onclick={openChangePassword}
+							class="navbar-mobile-link"
+						>
+							🔐 Cambiar contraseña
+						</button>
+
+						<button
 							onclick={handleLogout}
 							class="navbar-mobile-logout"
 						>
@@ -245,6 +341,86 @@
 		{/if}
 	</div>
 </nav>
+
+{#if changePasswordOpen}
+	<div class="password-modal-overlay" role="presentation">
+		<div class="password-modal" role="dialog" aria-modal="true" aria-labelledby="change-password-title">
+			<div class="password-modal-header">
+				<h3 id="change-password-title" class="password-modal-title">Cambiar contraseña</h3>
+				<button class="password-modal-close" type="button" onclick={closeChangePassword}>✕</button>
+			</div>
+
+			<p class="password-modal-help">
+				Para evitar bloqueos, te pedimos tu contraseña actual y confirmación de la nueva.
+			</p>
+
+			<form
+				onsubmit={(event) => {
+					event.preventDefault();
+					requestPasswordChange();
+				}}
+				class="password-form"
+			>
+				<label class="password-label" for="current-password">Contraseña actual</label>
+				<input
+					id="current-password"
+					type="password"
+					class="password-input"
+					bind:value={currentPassword}
+					autocomplete="current-password"
+					required
+				/>
+
+				<label class="password-label" for="new-password">Nueva contraseña</label>
+				<input
+					id="new-password"
+					type="password"
+					class="password-input"
+					bind:value={newPassword}
+					autocomplete="new-password"
+					required
+				/>
+
+				<label class="password-label" for="confirm-password">Confirmar nueva contraseña</label>
+				<input
+					id="confirm-password"
+					type="password"
+					class="password-input"
+					bind:value={confirmPassword}
+					autocomplete="new-password"
+					required
+				/>
+
+				{#if passwordError}
+					<p class="password-feedback password-feedback-error">{passwordError}</p>
+				{/if}
+				{#if passwordSuccess}
+					<p class="password-feedback password-feedback-success">{passwordSuccess}</p>
+				{/if}
+
+				<div class="password-actions">
+					<button type="button" class="password-btn password-btn-secondary" onclick={closeChangePassword}>
+						Cancelar
+					</button>
+					<button type="submit" class="password-btn password-btn-primary" disabled={isChangingPassword}>
+						{isChangingPassword ? 'Guardando...' : 'Guardar nueva contraseña'}
+					</button>
+				</div>
+			</form>
+		</div>
+	</div>
+{/if}
+
+<ConfirmDialog
+	open={confirmChangePasswordOpen}
+	title="Confirmar cambio de contraseña"
+	message="Esta acción actualizará tu credencial de acceso. ¿Deseas continuar?"
+	confirmText="Sí, cambiar"
+	cancelText="Cancelar"
+	variant="warning"
+	onCancel={() => (confirmChangePasswordOpen = false)}
+	onConfirm={confirmPasswordChange}
+/>
 
 <style>
 	.navbar {
@@ -334,6 +510,21 @@
 		border: 1px solid #ef4444;
 		border-radius: 0.5rem;
 		transition: background-color 0.2s ease;
+	}
+
+	.navbar-password-btn {
+		padding: 0.5rem 1rem;
+		font-size: 0.875rem;
+		font-weight: 500;
+		color: #dbeafe;
+		background: #1d4ed8;
+		border: 1px solid #3b82f6;
+		border-radius: 0.5rem;
+		transition: background-color 0.2s ease;
+	}
+
+	.navbar-password-btn:hover {
+		background: #2563eb;
 	}
 
 	.navbar-logout:hover {
@@ -469,5 +660,126 @@
 
 	button{
 		background-color: #334155;
+	}
+
+	.password-modal-overlay {
+		position: fixed;
+		inset: 0;
+		background: rgba(2, 6, 23, 0.72);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		z-index: 80;
+		padding: 1rem;
+		backdrop-filter: blur(3px);
+	}
+
+	.password-modal {
+		width: min(520px, 100%);
+		background: #1e293b;
+		border: 1px solid #334155;
+		border-radius: 0.75rem;
+		padding: 1.2rem;
+		box-shadow: 0 20px 34px rgba(0, 0, 0, 0.45);
+	}
+
+	.password-modal-header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.8rem;
+	}
+
+	.password-modal-title {
+		margin: 0;
+		font-size: 1.15rem;
+		font-weight: 700;
+		color: #f1f5f9;
+	}
+
+	.password-modal-close {
+		border: 1px solid #475569;
+		background: #334155;
+		color: #e2e8f0;
+		border-radius: 0.45rem;
+		padding: 0.25rem 0.45rem;
+	}
+
+	.password-modal-help {
+		margin: 0.75rem 0 0;
+		font-size: 0.9rem;
+		color: #cbd5e1;
+	}
+
+	.password-form {
+		display: grid;
+		gap: 0.65rem;
+		margin-top: 0.9rem;
+	}
+
+	.password-label {
+		font-size: 0.82rem;
+		font-weight: 600;
+		color: #cbd5e1;
+	}
+
+	.password-input {
+		width: 100%;
+		padding: 0.55rem 0.8rem;
+		border: 1px solid #475569;
+		border-radius: 0.5rem;
+		background: #334155;
+		color: #f1f5f9;
+	}
+
+	.password-input:focus {
+		outline: none;
+		border-color: #3b82f6;
+		box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25);
+	}
+
+	.password-feedback {
+		margin: 0.25rem 0 0;
+		font-size: 0.86rem;
+	}
+
+	.password-feedback-error {
+		color: #fca5a5;
+	}
+
+	.password-feedback-success {
+		color: #86efac;
+	}
+
+	.password-actions {
+		display: flex;
+		justify-content: flex-end;
+		gap: 0.65rem;
+		margin-top: 0.6rem;
+	}
+
+	.password-btn {
+		border-radius: 0.5rem;
+		padding: 0.55rem 0.9rem;
+		font-size: 0.88rem;
+		font-weight: 600;
+		border: 1px solid transparent;
+	}
+
+	.password-btn-secondary {
+		background: #334155;
+		border-color: #475569;
+		color: #e2e8f0;
+	}
+
+	.password-btn-primary {
+		background: #0284c7;
+		border-color: #0ea5e9;
+		color: #e0f2fe;
+	}
+
+	.password-btn:disabled {
+		opacity: 0.6;
+		cursor: not-allowed;
 	}
 </style>
