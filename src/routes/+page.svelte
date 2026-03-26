@@ -58,7 +58,7 @@
 			}
 
 			// Login exitoso - redirige según el rol
-			await new Promise((resolve) => setTimeout(resolve, 500)); // Simula pequeño delay
+			await new Promise((resolveTimeout) => setTimeout(resolveTimeout, 500)); // Simula pequeño delay
 
 			if (result.user.role === 'admin') {
 				await goto(resolve('/admin/dashboard'));
@@ -66,6 +66,9 @@
 				await goto(resolve('/client/orders'));
 			} else if (result.user.role === 'delivery') {
 				await goto(resolve('/delivery'));
+			} else {
+				error = 'Rol de usuario no reconocido.';
+				isSubmitting = false;
 			}
 		} catch {
 			error = 'Error al iniciar sesión. Por favor intenta nuevamente.';

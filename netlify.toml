@@ -1,0 +1,68 @@
+# Netlify Configuration for Reparto Project
+
+[build]
+  command = "npm run build"
+  functions = "netlify/functions"
+  publish = ".svelte-kit/netlify"
+
+[functions]
+  node_bundler = "esbuild"
+  external_node_modules = ["@supabase/supabase-js"]
+
+# Security Headers
+[[headers]]
+  for = "/*"
+  [headers.values]
+    # Content Security Policy - Previene XSS
+    Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self'; connect-src 'self' https://vkypfoyjuogyoqlowcbg.supabase.co https://*.supabase.co; frame-ancestors 'none';"
+    
+    # Previene clickjacking
+    X-Frame-Options = "DENY"
+    
+    # Previene MIME type sniffing
+    X-Content-Type-Options = "nosniff"
+    
+    # Habilita protección XSS en navegadores antiguos
+    X-XSS-Protection = "1; mode=block"
+    
+    # Referrer Policy
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    
+    # Permissions Policy (Feature Policy)
+    Permissions-Policy = "geolocation=(), microphone=(), camera=()"
+    
+    # HSTS - Obliga HTTPS (configurar después de probar)
+    Strict-Transport-Security = "max-age=31536000; includeSubDomains; preload"
+
+# Redireccionamiento SPA: Todas las rutas no encontradas van a /
+[[redirects]]
+  from = "/*"
+  to = "/"
+  status = 200
+
+# Configuración de caché para archivos estáticos
+[[headers]]
+  for = "/_app/*"
+  [headers.values]
+    Cache-Control = "public, immutable, max-age=31536000"
+
+[[headers]]
+  for = "/favicon.ico"
+  [headers.values]
+    Cache-Control = "public, max-age=604800"
+
+[[headers]]
+  for = "/manifest.json"
+  [headers.values]
+    Cache-Control = "public, max-age=3600"
+
+# Limitar tamaño de uploads
+[[context.deploy-preview.functions."api/*"]]
+  node_bundler = "esbuild"
+
+[[context.production.functions]]
+  node_bundler = "esbuild"
+
+# Variables de entorno en Netlify (configurar en UI o .env.production)
+# PUBLIC_SUPABASE_URL
+# PUBLIC_SUPABASE_PUBLISHABLE_KEY

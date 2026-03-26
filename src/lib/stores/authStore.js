@@ -2,6 +2,7 @@
  * STORE DE AUTENTICACIÓN
  * Gestiona la sesión del usuario actual, login, logout y verificación de roles.
  * Fuente única: base de datos (Supabase).
+ * Seguridad: Usa sessionStorage para la sesión actual (más seguro que localStorage para datos sensibles)
  */
 
 import { writable } from 'svelte/store';
@@ -10,21 +11,52 @@ import {
 	isDatabaseEnabled
 } from '../utils/supabaseDb.js';
 import { isSupabaseAuthEnabled, supabaseClient } from '../utils/supabaseClient.js';
+import { validateLoginData } from '../utils/validators.js';
+
+// Constantes de seguridad
+const SESSION_TIMEOUT_MS = parseInt(import.meta.env.VITE_SESSION_TIMEOUT || '3600000'); // 1 hora
+const SESSION_WARNING_MS = SESSION_TIMEOUT_MS * 0.9; // Aviso 90% del tiempo
+const SESSION_STORAGE_KEY = 'app_session';
+const SESSION_EXPIRY_KEY = 'app_session_expiry';
 
 /**
  * Crea un store reactivo de Svelte para la sesión del usuario actual
  * - Contiene los datos del usuario autenticado o null si no está logueado
- * - Se sincroniza con localStorage para persistencia entre recargas
+ * - Se sincroniza con sessionStorage (más seguro que localStorage)
+ * - Implementa timeout automático de sesión
  */
 function createAuthStore() {
-	// Intenta recuperar la sesión guardada en localStorage
-	const storedSession = typeof window !== 'undefined' ? localStorage.getItem('currentUser') : null;
-	const initialValue = storedSession ? JSON.parse(storedSession) : null;
+	// Intenta recuperar la sesión guardada en sessionStorage
+	const storedSession = typeof window !== 'undefined' ? sessionStorage.getItem(SESSION_STORAGE_KEY) : null;
+	const storedExpiry = typeof window !== 'undefined' ? sessionStorage.getItem(SESSION_EXPIRY_KEY) : null;
+	
+	// Valida que la sesión no haya expirado
+	let initialValue = null;
+	if (storedSession && storedExpiry) {
+		if (Date.now() < parseInt(storedExpiry)) {
+			try {
+				initialValue = JSON.parse(storedSession);
+			} catch (error) {
+				console.warn('Session storage corrupted, clearing', error);
+				if (typeof window !== 'undefined') {
+					sessionStorage.removeItem(SESSION_STORAGE_KEY);
+					sessionStorage.removeItem(SESSION_EXPIRY_KEY);
+				}
+			}
+		} else {
+			// Sesión expirada, limpiar
+			if (typeof window !== 'undefined') {
+				sessionStorage.removeItem(SESSION_STORAGE_KEY);
+				sessionStorage.removeItem(SESSION_EXPIRY_KEY);
+			}
+		}
+	}
 
 	// Crea el store reactivo con el valor inicial
 	const { subscribe, set } = writable(initialValue);
+	let sessionTimeoutHandle = null;
 
-	return {
+	const store = {
 		subscribe,
 
 		/**
@@ -34,8 +66,15 @@ function createAuthStore() {
 		 * @returns {object} - { success: boolean, error?: string, user?: object }
 		 */
 		login: async (email, password) => {
-			const normalizedEmail = String(email || '').trim().toLowerCase();
-			const normalizedPassword = String(password || '');
+			// Validar inputs
+			const validation = validateLoginData({ email, password });
+			if (!validation.isValid) {
+				const errorMsg = validation.errors.map(e => e.message).join('; ');
+				return { success: false, error: errorMsg };
+			}
+
+			const normalizedEmail = email.trim().toLowerCase();
+			const normalizedPassword = String(password);
 
 			if (!isDatabaseEnabled) {
 				return { success: false, error: 'La conexión con la base de datos no está configurada' };
@@ -57,9 +96,8 @@ function createAuthStore() {
 				authData = data;
 				authError = error;
 
-				// No se hace auto-signup en login por seguridad.
-
 				if (authError) {
+					console.warn('Auth error:', authError.message);
 					return { success: false, error: 'Email o contraseña incorrectos' };
 				}
 
@@ -92,22 +130,52 @@ function createAuthStore() {
 				role: user.role,
 				zone: user.zone,
 				deliveryStaffId: user.role === 'delivery' ? user.deliveryStaffId ?? user.id : null,
-				loginAt: new Date()
+				loginAt: new Date().toISOString()
 			};
 
-			// Guarda en el store y en localStorage
+			// Calcula tiempo de expiración
+			const expiryTime = Date.now() + SESSION_TIMEOUT_MS;
+
+			// Guarda en el store y en sessionStorage
 			set(session);
 			if (typeof window !== 'undefined') {
-				localStorage.setItem('currentUser', JSON.stringify(session));
+				sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session));
+				sessionStorage.setItem(SESSION_EXPIRY_KEY, expiryTime.toString());
+				
+				// Limpia localStorage si existe sesión anterior (migración)
+				localStorage.removeItem('currentUser');
 			}
 
+			// Inicia timer de timeout
+			store.resetSessionTimeout();
+
 			return { success: true, user: session };
+		},
+
+		/**
+		 * Reinicia el timer de timeout de sesión
+		 */
+		resetSessionTimeout() {
+			if (sessionTimeoutHandle) {
+				clearTimeout(sessionTimeoutHandle);
+			}
+
+			if (typeof window !== 'undefined') {
+				sessionTimeoutHandle = setTimeout(() => {
+					console.warn('Sesión expirada por timeout');
+					store.logout();
+				}, SESSION_TIMEOUT_MS);
+			}
 		},
 
 		/**
 		 * Cierra la sesión del usuario actual
 		 */
 		logout: async () => {
+			if (sessionTimeoutHandle) {
+				clearTimeout(sessionTimeoutHandle);
+			}
+
 			if (isSupabaseAuthEnabled && supabaseClient) {
 				try {
 					await supabaseClient.auth.signOut();
@@ -118,6 +186,8 @@ function createAuthStore() {
 
 			set(null);
 			if (typeof window !== 'undefined') {
+				sessionStorage.removeItem(SESSION_STORAGE_KEY);
+				sessionStorage.removeItem(SESSION_EXPIRY_KEY);
 				localStorage.removeItem('currentUser');
 			}
 		},
@@ -136,7 +206,7 @@ function createAuthStore() {
 
 		/**
 		 * Obtiene el rol del usuario actual
-		 * @returns {string|null} - 'admin', 'client', o null
+		 * @returns {string|null} - 'admin', 'client', 'delivery' o null
 		 */
 		getRole: () => {
 			let role = null;
@@ -144,8 +214,35 @@ function createAuthStore() {
 				role = session?.role || null;
 			})();
 			return role;
+		},
+
+		/**
+		 * Obtiene el ID del usuario actual
+		 * @returns {number|null}
+		 */
+		getUserId: () => {
+			let id = null;
+			subscribe((session) => {
+				id = session?.id || null;
+			})();
+			return id;
+		},
+
+		/**
+		 * Verifica si la sesión va a expirar pronto
+		 * @returns {boolean}
+		 */
+		isSessionExpiringWarning: () => {
+			if (typeof window === 'undefined') return false;
+			const expiryStr = sessionStorage.getItem(SESSION_EXPIRY_KEY);
+			if (!expiryStr) return false;
+			const expiryTime = parseInt(expiryStr);
+			const timeLeft = expiryTime - Date.now();
+			return timeLeft < (SESSION_TIMEOUT_MS - SESSION_WARNING_MS) && timeLeft > 0;
 		}
 	};
+
+	return store;
 }
 
 // Exporta la instancia única del store de autenticación
