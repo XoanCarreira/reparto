@@ -6,10 +6,7 @@
  */
 
 import { writable } from 'svelte/store';
-import {
-	fetchProfileByAuthUserIdDb,
-	isDatabaseEnabled
-} from '../utils/supabaseDb.js';
+import { fetchProfileByAuthUserIdDb, isDatabaseEnabled } from '../utils/supabaseDb.js';
 import { isSupabaseAuthEnabled, supabaseClient } from '../utils/supabaseClient.js';
 import { validateLoginData } from '../utils/validators.js';
 
@@ -27,9 +24,11 @@ const SESSION_EXPIRY_KEY = 'app_session_expiry';
  */
 function createAuthStore() {
 	// Intenta recuperar la sesión guardada en sessionStorage
-	const storedSession = typeof window !== 'undefined' ? sessionStorage.getItem(SESSION_STORAGE_KEY) : null;
-	const storedExpiry = typeof window !== 'undefined' ? sessionStorage.getItem(SESSION_EXPIRY_KEY) : null;
-	
+	const storedSession =
+		typeof window !== 'undefined' ? sessionStorage.getItem(SESSION_STORAGE_KEY) : null;
+	const storedExpiry =
+		typeof window !== 'undefined' ? sessionStorage.getItem(SESSION_EXPIRY_KEY) : null;
+
 	// Valida que la sesión no haya expirado
 	let initialValue = null;
 	if (storedSession && storedExpiry) {
@@ -69,7 +68,7 @@ function createAuthStore() {
 			// Validar inputs
 			const validation = validateLoginData({ email, password });
 			if (!validation.isValid) {
-				const errorMsg = validation.errors.map(e => e.message).join('; ');
+				const errorMsg = validation.errors.map((e) => e.message).join('; ');
 				return { success: false, error: errorMsg };
 			}
 
@@ -129,7 +128,7 @@ function createAuthStore() {
 				name: user.name,
 				role: user.role,
 				zone: user.zone,
-				deliveryStaffId: user.role === 'delivery' ? user.deliveryStaffId ?? user.id : null,
+				deliveryStaffId: user.role === 'delivery' ? (user.deliveryStaffId ?? user.id) : null,
 				loginAt: new Date().toISOString()
 			};
 
@@ -141,7 +140,7 @@ function createAuthStore() {
 			if (typeof window !== 'undefined') {
 				sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session));
 				sessionStorage.setItem(SESSION_EXPIRY_KEY, expiryTime.toString());
-				
+
 				// Limpia localStorage si existe sesión anterior (migración)
 				localStorage.removeItem('currentUser');
 			}
@@ -224,7 +223,11 @@ function createAuthStore() {
 							error: 'La nueva contraseña debe ser diferente de la actual'
 						};
 					}
-					if (message.includes('pwned') || message.includes('leaked') || message.includes('compromised')) {
+					if (
+						message.includes('pwned') ||
+						message.includes('leaked') ||
+						message.includes('compromised')
+					) {
 						return {
 							success: false,
 							error: 'La nueva contraseña aparece filtrada. Elige una más segura.'
@@ -347,7 +350,7 @@ function createAuthStore() {
 			if (!expiryStr) return false;
 			const expiryTime = parseInt(expiryStr);
 			const timeLeft = expiryTime - Date.now();
-			return timeLeft < (SESSION_TIMEOUT_MS - SESSION_WARNING_MS) && timeLeft > 0;
+			return timeLeft < SESSION_TIMEOUT_MS - SESSION_WARNING_MS && timeLeft > 0;
 		}
 	};
 
