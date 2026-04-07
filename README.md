@@ -7,35 +7,25 @@ Aplicación de gestión de entregas con SvelteKit.
 - Node.js 20+
 - npm
 - Proyecto Supabase enlazado
+- Svelte 5
 
-## Configuración
 
-1. Instala dependencias:
+## Roles
 
-```bash
-npm install
-```
+- Empresario
+- Repartidor
+- Cliente
 
-2. Configura variables públicas en `.env.example` (o en tu `.env` local):
+### Usuario objetivo
 
-```dotenv
-PUBLIC_SUPABASE_URL=...
-PUBLIC_SUPABASE_PUBLISHABLE_KEY=...
-```
+Se enfoca en dar servico  a empresas con repartos locales y programados a clientes fijos. 
 
-3. Aplica migraciones en Supabase:
+### Casos de uso
 
-```bash
-npx supabase db push
-```
+Cada rol tiene su propio dashboard.
 
-## Desarrollo
+*El cliente* accede a su dashboard desde donde puede gestionar de manera fácil y rápida las necesidades de stock a suministrar en la próxima entrega. Gestiona incidencias, revisa pedidos o visualiza consumos.
 
-```bash
-npm run dev
-```
+*El repartidor*, desde su dashboard visualiza rutas asignadas y dias de reparto. Puede seleccionarla para inicar reparto. Checklist de entregas, notificaciones de incidencias.
 
-## Notas
-
-- La aplicación usa Supabase como fuente única de datos.
-- No se incluyen datos de ejemplo ni credenciales de demostración en la UI.
+*El empresario*, tiene acceso y control total sobre toda la información. Stock, pedidos, rutas, repartidores, clientes, incidencias...
