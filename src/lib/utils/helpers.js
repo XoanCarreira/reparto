@@ -216,3 +216,70 @@ export function sortBy(array, property, order = 'asc') {
 		return 0;
 	});
 }
+
+/**
+ * Construye las notas visibles de un pedido con autor y fecha.
+ * Soporta formato legacy (notes + deliveryNote) y payload JSON en notes.
+ * @param {Object} order - Pedido con campos notes/deliveryNote
+ * @returns {Array<{id: string, text: string, author: string, role: string, createdAt: Date|null}>}
+ */
+export function buildOrderNotesTimeline(order) {
+	const entries = [];
+
+	if (!order) {
+		return entries;
+	}
+
+	const pushEntry = (text, role, createdAt = null) => {
+		const normalizedText = String(text || '').trim();
+		if (!normalizedText) {
+			return;
+		}
+
+		const author =
+			role === 'admin'
+				? 'Admin'
+				: role === 'delivery'
+					? 'Repartidor'
+					: 'Cliente';
+
+		entries.push({
+			id: `${role}-${entries.length + 1}`,
+			text: normalizedText,
+			role,
+			author,
+			createdAt: createdAt ? new Date(createdAt) : null
+		});
+	};
+
+	const rawNotes = String(order.notes || '').trim();
+	if (rawNotes.startsWith('[')) {
+		try {
+			const parsed = JSON.parse(rawNotes);
+			if (Array.isArray(parsed)) {
+				parsed.forEach((item) => {
+					if (!item || typeof item !== 'object') {
+						return;
+					}
+
+					const role = ['admin', 'delivery', 'client'].includes(item.role)
+						? item.role
+						: (order.isManual ? 'admin' : 'client');
+					pushEntry(item.text, role, item.createdAt || null);
+				});
+			}
+		} catch {
+			pushEntry(rawNotes, order.isManual ? 'admin' : 'client', order.createdAt || null);
+		}
+	} else {
+		pushEntry(rawNotes, order.isManual ? 'admin' : 'client', order.createdAt || null);
+	}
+
+	pushEntry(order.deliveryNote, 'delivery', order.deliveryNoteAt || order.deliveredAt || null);
+
+	return entries.sort((a, b) => {
+		const aTime = a.createdAt ? new Date(a.createdAt).getTime() : Number.MIN_SAFE_INTEGER;
+		const bTime = b.createdAt ? new Date(b.createdAt).getTime() : Number.MIN_SAFE_INTEGER;
+		return aTime - bTime;
+	});
+}

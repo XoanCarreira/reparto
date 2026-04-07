@@ -128,12 +128,23 @@
 		isSubmitting = true;
 
 		try {
-			// Crea el pedido usando el store
-			const orderId = ordersStore.create(currentUser.id, items, notes);
+			if (!currentUser?.id) {
+				showToastMessage('Sesion no valida. Vuelve a iniciar sesion.', 'error');
+				isSubmitting = false;
+				return;
+			}
+
+			// Crea el pedido en modo DB-first para evitar falsos positivos de UI.
+			const result = await ordersStore.createDbFirst(currentUser.id, items, notes);
+			if (!result?.success) {
+				showToastMessage(result?.error || 'No se pudo crear el pedido en base de datos.', 'error');
+				isSubmitting = false;
+				return;
+			}
 
 			// Simula un pequeño delay
 			await new Promise((resolve) => setTimeout(resolve, 500));
-			showToastMessage(`✓ Pedido #${orderId} creado correctamente`, 'success');
+			showToastMessage(`✓ Pedido #${result.orderId} creado correctamente`, 'success');
 
 			// Espera a que se muestre el Toast antes de redirigir
 			await new Promise((resolve) => setTimeout(resolve, 1500));

@@ -8,7 +8,6 @@
 	import Card from '$lib/components/Card.svelte';
 	import Button from '$lib/components/Button.svelte';
 	import Badge from '$lib/components/Badge.svelte';
-	import { browser } from '$app/environment';
 	import { authStore } from '$lib/stores/authStore.js';
 	import {
 		ordersStore,
@@ -16,9 +15,10 @@
 		zonesStore,
 		clientsStore,
 		deliveryStaffStore,
+		specialDeliveriesStore,
 		productsStore
 	} from '$lib/stores/dataStore.js';
-	import { formatDate } from '$lib/utils/helpers.js';
+	import { buildOrderNotesTimeline, formatDate, formatDateTime } from '$lib/utils/helpers.js';
 
 	let currentUser = $state(null);
 	let allOrders = $state([]);
@@ -26,12 +26,17 @@
 	let allZones = $state([]);
 	let allClients = $state([]);
 	let allStaff = $state([]);
+	let allSpecialDeliveries = $state([]);
 	let allProducts = $state([]);
 
 	let deliveryNotes = $state({});
 	let internalIncidentText = $state({});
-	let preferredDeliveryOrder = $state([]);
-	let hydratedPreferenceKey = $state('');
+	let selectedRouteId = $state(null);
+	let selectedSpecialDeliveryId = $state(null);
+	let isRouteSubmitting = $state(false);
+	let routeActionError = $state('');
+	let deliveryActionError = $state('');
+	let busyDeliveryOrders = $state({});
 
 	authStore.subscribe((session) => {
 		currentUser = session;
@@ -55,6 +60,10 @@
 
 	deliveryStaffStore.subscribe(($staff) => {
 		allStaff = $staff;
+	});
+
+	specialDeliveriesStore.subscribe(($specialDeliveries) => {
+		allSpecialDeliveries = $specialDeliveries;
 	});
 
 	productsStore.subscribe(($products) => {
@@ -87,19 +96,51 @@
 			null
 	);
 
-	const activeZoneId = $derived(currentDeliveryStaff?.zoneId ?? currentUser?.zone ?? null);
+	const assignedZoneIds = $derived(
+		Array.isArray(currentDeliveryStaff?.zoneIds) && currentDeliveryStaff.zoneIds.length > 0
+			? currentDeliveryStaff.zoneIds
+			: (currentDeliveryStaff?.zoneId ? [currentDeliveryStaff.zoneId] : (currentUser?.zone ? [currentUser.zone] : []))
+	);
 
 	const assignedZones = $derived(
-		allZones.filter((zone) => Number(zone.id) === Number(activeZoneId))
+		allZones.filter((zone) => assignedZoneIds.some((zoneId) => Number(zone.id) === Number(zoneId)))
+	);
+
+	const assignedSpecialDeliveries = $derived(
+		allSpecialDeliveries.filter(
+			(specialDelivery) =>
+				Number(specialDelivery.staffId) ===
+					Number(currentDeliveryStaff?.id || currentUser?.deliveryStaffId || currentUser?.id) &&
+				specialDelivery.status === 'active'
+		)
 	);
 
 	const todaysAssignedZones = $derived(assignedZones.filter((zone) => isZoneScheduledForToday(zone)));
 
+	const routeZoneId = $derived(selectedRouteId);
+	const routeSpecialDeliveryId = $derived(selectedSpecialDeliveryId);
+
+	const selectedRoute = $derived(
+		routeSpecialDeliveryId
+			? assignedSpecialDeliveries.find(
+					(specialDelivery) => Number(specialDelivery.id) === Number(routeSpecialDeliveryId)
+				)
+			: assignedZones.find((zone) => Number(zone.id) === Number(routeZoneId)) || null
+	);
+
 	const assignedOrders = $derived(
 		allOrders.filter((order) => {
-			const client = allClients.find((item) => item.id === order.clientId);
-			if (!client) return false;
-			return Number(client.zone) === Number(activeZoneId);
+			if (routeSpecialDeliveryId) {
+				return Number(order.specialDeliveryId) === Number(routeSpecialDeliveryId);
+			}
+
+			if (routeZoneId) {
+				const client = allClients.find((item) => item.id === order.clientId);
+				if (!client) return false;
+				return Number(client.zone) === Number(routeZoneId);
+			}
+
+			return false;
 		})
 	);
 
@@ -114,24 +155,20 @@
 	);
 	const routeActive = $derived(inDeliveryAssignedOrders.length > 0);
 
-	const preferredOrderStorageKey = $derived(
-		(currentDeliveryStaff?.id || currentUser?.deliveryStaffId || currentUser?.id)
-			? `delivery-preferred-order-${currentDeliveryStaff?.id || currentUser?.deliveryStaffId || currentUser?.id}`
-			: ''
-	);
-
 	const sortedRouteOrders = $derived(
 		[...routeOrders].sort((a, b) => {
-			const aPriority = preferredDeliveryOrder.indexOf(a.id);
-			const bPriority = preferredDeliveryOrder.indexOf(b.id);
-
-			const aIndex = aPriority === -1 ? Number.MAX_SAFE_INTEGER : aPriority;
-			const bIndex = bPriority === -1 ? Number.MAX_SAFE_INTEGER : bPriority;
+			const aIndex = Number.isFinite(Number(a.deliveryOrder)) ? Number(a.deliveryOrder) : Number.MAX_SAFE_INTEGER;
+			const bIndex = Number.isFinite(Number(b.deliveryOrder)) ? Number(b.deliveryOrder) : Number.MAX_SAFE_INTEGER;
 			if (aIndex !== bIndex) {
 				return aIndex - bIndex;
 			}
 
-			return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+			const createdDiff = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+			if (createdDiff !== 0) {
+				return createdDiff;
+			}
+
+			return Number(a.id) - Number(b.id);
 		})
 	);
 
@@ -141,68 +178,6 @@
 			assignedOrders.some((order) => order.id === incident.orderId)
 		)
 	);
-
-	function arraysMatch(a, b) {
-		if (a.length !== b.length) {
-			return false;
-		}
-
-		for (let i = 0; i < a.length; i++) {
-			if (Number(a[i]) !== Number(b[i])) {
-				return false;
-			}
-		}
-
-		return true;
-	}
-
-	function buildNormalizedPreferredOrder(activeOrderIds, currentPreferredOrder) {
-		const retained = currentPreferredOrder.filter((orderId) => activeOrderIds.includes(orderId));
-		const missing = activeOrderIds.filter((orderId) => !retained.includes(orderId));
-		return [...retained, ...missing];
-	}
-
-	$effect(() => {
-		if (!browser || !preferredOrderStorageKey) {
-			return;
-		}
-
-		if (hydratedPreferenceKey === preferredOrderStorageKey) {
-			return;
-		}
-
-		let parsed = [];
-		const storedOrder = localStorage.getItem(preferredOrderStorageKey);
-		if (storedOrder) {
-			try {
-				const value = JSON.parse(storedOrder);
-				if (Array.isArray(value)) {
-					parsed = value.map((item) => Number(item)).filter((item) => Number.isFinite(item));
-				}
-			} catch {
-				parsed = [];
-			}
-		}
-
-		preferredDeliveryOrder = parsed;
-		hydratedPreferenceKey = preferredOrderStorageKey;
-	});
-
-	$effect(() => {
-		const activeOrderIds = routeOrders.map((order) => order.id);
-		const normalizedOrder = buildNormalizedPreferredOrder(activeOrderIds, preferredDeliveryOrder);
-		if (!arraysMatch(normalizedOrder, preferredDeliveryOrder)) {
-			preferredDeliveryOrder = normalizedOrder;
-		}
-	});
-
-	$effect(() => {
-		if (!browser || !preferredOrderStorageKey) {
-			return;
-		}
-
-		localStorage.setItem(preferredOrderStorageKey, JSON.stringify(preferredDeliveryOrder));
-	});
 
 	function getClientName(clientId) {
 		const client = allClients.find((item) => item.id === clientId);
@@ -242,49 +217,82 @@
 		return product?.name || `Producto #${productId}`;
 	}
 
-	function getPreferredDeliveryPosition(orderId) {
-		const index = preferredDeliveryOrder.indexOf(orderId);
-		if (index === -1) {
-			return preferredDeliveryOrder.length + 1;
-		}
-
-		return index + 1;
+	function getOrderNotes(order) {
+		return buildOrderNotesTimeline(order);
 	}
 
-	function movePreferredOrder(orderId, direction) {
-		const currentIndex = preferredDeliveryOrder.indexOf(orderId);
-		if (currentIndex === -1) {
+	function selectRoute(zoneId) {
+		if (routeActive || isRouteSubmitting) {
 			return;
 		}
 
-		const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
-		if (targetIndex < 0 || targetIndex >= preferredDeliveryOrder.length) {
+		const normalizedZoneId = Number(zoneId);
+		selectedSpecialDeliveryId = null;
+		selectedRouteId =
+			Number(selectedRouteId) === normalizedZoneId
+				? null
+				: normalizedZoneId;
+	}
+
+	function selectSpecialDelivery(specialDeliveryId) {
+		if (routeActive || isRouteSubmitting) {
 			return;
 		}
 
-		const nextOrder = [...preferredDeliveryOrder];
-		[nextOrder[currentIndex], nextOrder[targetIndex]] = [
-			nextOrder[targetIndex],
-			nextOrder[currentIndex]
-		];
-		preferredDeliveryOrder = nextOrder;
+		const normalizedSpecialDeliveryId = Number(specialDeliveryId);
+		selectedRouteId = null;
+		selectedSpecialDeliveryId =
+			Number(selectedSpecialDeliveryId) === normalizedSpecialDeliveryId
+				? null
+				: normalizedSpecialDeliveryId;
 	}
 
-	function resetPreferredDeliveryOrder() {
-		preferredDeliveryOrder = [];
-	}
+	async function toggleRoute() {
+		if (isRouteSubmitting) {
+			return;
+		}
 
-	function toggleRoute() {
 		if (!routeActive) {
-			// Al iniciar ruta, todos los pedidos pendientes de la zona pasan a "en reparto".
-			assignedOrders
-				.filter((order) => order.status === 'pending')
-				.forEach((order) => ordersStore.markInDelivery(order.id));
+			if (!selectedRouteId && !selectedSpecialDeliveryId) {
+				return;
+			}
+
+			isRouteSubmitting = true;
+			routeActionError = '';
+
+			try {
+				// Persistencia DB-first: solo refleja en UI cuando cada pedido se confirma en BD.
+				for (const order of assignedOrders.filter((item) => item.status === 'pending')) {
+					const result = await ordersStore.markInDeliveryDbFirst(order.id);
+					if (!result?.success) {
+						throw new Error(result?.error || `No se pudo iniciar la ruta (pedido #${order.id})`);
+					}
+				}
+			} catch (error) {
+				routeActionError = error?.message || 'No se pudo iniciar la ruta';
+			} finally {
+				isRouteSubmitting = false;
+			}
+
 			return;
 		}
 
-		// Al parar ruta, los pedidos no entregados vuelven a "pendiente".
-		inDeliveryAssignedOrders.forEach((order) => ordersStore.updateStatus(order.id, 'pending'));
+		isRouteSubmitting = true;
+		routeActionError = '';
+
+		try {
+			// Al parar ruta, los pedidos no entregados vuelven a "pendiente".
+			for (const order of inDeliveryAssignedOrders) {
+				const result = await ordersStore.setStatusDbFirst(order.id, 'pending');
+				if (!result?.success) {
+					throw new Error(result?.error || `No se pudo finalizar la ruta (pedido #${order.id})`);
+				}
+			}
+		} catch (error) {
+			routeActionError = error?.message || 'No se pudo finalizar la ruta';
+		} finally {
+			isRouteSubmitting = false;
+		}
 	}
 
 	function updateNote(orderId, value) {
@@ -295,11 +303,25 @@
 		internalIncidentText = { ...internalIncidentText, [orderId]: value };
 	}
 
-	function validateDelivery(orderId) {
+	async function validateDelivery(orderId) {
+		if (busyDeliveryOrders[orderId]) {
+			return;
+		}
+
+		busyDeliveryOrders = { ...busyDeliveryOrders, [orderId]: true };
+		deliveryActionError = '';
+
 		const note = String(deliveryNotes[orderId] || '').trim();
-		ordersStore.updateDeliveryNote(orderId, note);
-		ordersStore.updateStatus(orderId, 'delivered');
+		const result = await ordersStore.completeDeliveryDbFirst(orderId, note);
+
+		if (!result?.success) {
+			deliveryActionError = result?.error || `No se pudo confirmar la entrega del pedido #${orderId}`;
+			busyDeliveryOrders = { ...busyDeliveryOrders, [orderId]: false };
+			return;
+		}
+
 		deliveryNotes = { ...deliveryNotes, [orderId]: '' };
+		busyDeliveryOrders = { ...busyDeliveryOrders, [orderId]: false };
 	}
 
 	async function createInternalIncident(orderId) {
@@ -333,10 +355,29 @@
 			<h1 class="page-title">🚚 Panel de Reparto</h1>
 			<p class="page-subtitle">Operativa diaria de rutas, entregas e incidencias</p>
 		</div>
-		<Button variant={routeActive ? 'danger' : 'primary'} size="sm" onclick={toggleRoute}>
-			{routeActive ? 'Finalizar ruta activa' : 'Iniciar ruta'}
-		</Button>
+		<div class="route-toggle-wrap">
+			{#if !routeActive && !selectedRouteId && !selectedSpecialDeliveryId}
+				<p class="route-selection-hint">Selecciona una ruta para poder iniciarla.</p>
+			{/if}
+				
+			<Button
+				variant={routeActive ? 'danger' : 'primary'}
+				size="sm"
+				onclick={toggleRoute}
+				disabled={isRouteSubmitting || (!routeActive && !selectedRouteId && !selectedSpecialDeliveryId)}
+			>
+			{#if isRouteSubmitting}
+				Procesando...
+			{:else}
+				{routeActive ? 'Finalizar ruta activa' : 'Iniciar ruta'}
+			{/if}
+			</Button>
+		</div>
 	</div>
+
+	{#if routeActionError}
+		<p class="error-text">{routeActionError}</p>
+	{/if}
 
 	<!--Primer grupo de tarjetas que se muestran in line-->
 	<div class="group-card-flex">
@@ -346,11 +387,23 @@
 			{:else}
 			<div class="delivery-grid">
 				{#each todaysAssignedZones as zone (zone.id)}
-				<div class="delivery-info-card">
+				<div
+					class={`delivery-info-card route-card-selectable ${Number(selectedRouteId) === Number(zone.id) ? 'selected' : ''}`}
+				>
 					<p class="delivery-label">Zona</p>
 					<p class="delivery-value">{zone.name}</p>
 					<p class="delivery-meta">Horario: {zone.deliveryTime || 'No definido'}</p>
 					<p class="delivery-meta">Próxima: {zone.nextDelivery ? formatDate(zone.nextDelivery) : 'Sin fecha'}</p>
+					<button
+						type="button"
+						class="route-select-btn"
+						onclick={() => selectRoute(zone.id)}
+						disabled={routeActive}
+					>
+						{Number(selectedRouteId) === Number(zone.id)
+							? 'Quitar selección'
+							: 'Seleccionar ruta'}
+					</button>
 				</div>
 				{/each}
 			</div>
@@ -363,37 +416,78 @@
 			{:else}
 			<div class="delivery-grid">
 				{#each assignedZones as zone (zone.id)}
-				<div class="delivery-info-card">
+				<div
+					class={`delivery-info-card route-card-selectable ${Number(selectedRouteId) === Number(zone.id) ? 'selected' : ''}`}
+				>
 					<p class="delivery-label">Zona</p>
 					<p class="delivery-value">{zone.name}</p>
 					<p class="delivery-meta">Días: {Array.isArray(zone.deliveryDays) ? zone.deliveryDays.join(', ') : 'Sin definir'}</p>
 					<p class="delivery-meta">Horario: {zone.deliveryTime || 'No definido'}</p>
+					<button
+						type="button"
+						class="route-select-btn"
+						onclick={() => selectRoute(zone.id)}
+						disabled={routeActive}
+					>
+						{Number(selectedRouteId) === Number(zone.id)
+							? 'Quitar selección'
+							: 'Seleccionar ruta'}
+					</button>
 				</div>
 				{/each}
 			</div>
 			{/if}
 		</Card>	
+
+		<Card title="🎯 Entregas Especiales" titleClass="title-blue" class="card-section">
+			{#if assignedSpecialDeliveries.length === 0}
+				<p class="text-secondary">No tienes entregas especiales activas asignadas.</p>
+			{:else}
+				<div class="delivery-grid">
+					{#each assignedSpecialDeliveries as specialDelivery (specialDelivery.id)}
+						<div
+							class={`delivery-info-card route-card-selectable ${Number(selectedSpecialDeliveryId) === Number(specialDelivery.id) ? 'selected' : ''}`}
+						>
+							<p class="delivery-label">Entrega especial</p>
+							<p class="delivery-value">{specialDelivery.name}</p>
+							<p class="delivery-meta">Estado: {specialDelivery.status}</p>
+							<p class="delivery-meta">Notas: {specialDelivery.notes || 'Sin notas'}</p>
+							<button
+								type="button"
+								class="route-select-btn"
+								onclick={() => selectSpecialDelivery(specialDelivery.id)}
+								disabled={routeActive}
+							>
+								{Number(selectedSpecialDeliveryId) === Number(specialDelivery.id)
+									? 'Quitar selección'
+									: 'Seleccionar entrega'}
+							</button>
+						</div>
+					{/each}
+				</div>
+			{/if}
+		</Card>
 	</div>
 
 
 	<Card title="📦 Ruta Activa: Confirmación de Entregas" titleClass="title-violet" class="card-section">
+		{#if selectedRoute}
+			<p class="route-selected-label">Ruta seleccionada: <strong>{selectedRoute.name}</strong></p>
+		{/if}
+		{#if deliveryActionError}
+			<p class="error-text">{deliveryActionError}</p>
+		{/if}
 		{#if !routeActive}
-			<p class="text-secondary">Activa la ruta para empezar a confirmar entregas.</p>
+			<p class="text-secondary">Selecciona y activa una ruta para empezar a confirmar entregas.</p>
 		{:else if routeOrders.length === 0}
 			<p class="text-secondary">No hay pedidos pendientes en tu zona.</p>
 		{:else}
-			<div class="route-actions-bar">
-				<Button variant="secondary" size="sm" onclick={resetPreferredDeliveryOrder}>
-					Restablecer orden preferente
-				</Button>
-			</div>
 			<div class="orders-list">
-				{#each sortedRouteOrders as order (order.id)}
+				{#each sortedRouteOrders as order, index (order.id)}
 					{@const client = getClientData(order.clientId)}
 					{@const mapsLink = getClientMapsLink(client)}
-					{@const preferredPosition = getPreferredDeliveryPosition(order.id)}
-					{@const isFirst = preferredPosition === 1}
-					{@const isLast = preferredPosition === preferredDeliveryOrder.length}
+					{@const orderNotes = getOrderNotes(order)}
+					{@const preferredPosition = index + 1}
 					<div class="delivery-order-card">
 						<div class="delivery-order-header">
 							<div>
@@ -401,24 +495,6 @@
 							</div>
 							<div class="delivery-order-meta">
 								<p class="order-priority-badge">Entrega #{preferredPosition}</p>
-								<div class="priority-actions" aria-label="Orden preferente">
-									<button
-										type="button"
-										class="priority-btn"
-										disabled={isFirst}
-										onclick={() => movePreferredOrder(order.id, 'up')}
-									>
-										↑
-									</button>
-									<button
-										type="button"
-										class="priority-btn"
-										disabled={isLast}
-										onclick={() => movePreferredOrder(order.id, 'down')}
-									>
-										↓
-									</button>
-								</div>
 								<Badge status={order.status} />
 							</div>
 						</div>
@@ -456,6 +532,25 @@
 							</div>
 						</div>
 
+						{#if orderNotes.length > 0}
+							<div class="order-notes-box">
+								<p class="order-items-title">Notas del pedido</p>
+								<div class="order-notes-list">
+									{#each orderNotes as note (note.id)}
+										<div class="order-note-entry">
+											<p class="order-note-meta">
+												<strong>{note.author}</strong>
+												{#if note.createdAt}
+													 · {formatDateTime(note.createdAt)}
+												{/if}
+											</p>
+											<p class="order-note-text">{note.text}</p>
+										</div>
+									{/each}
+								</div>
+							</div>
+						{/if}
+
 						<div class="delivery-form-grid">
 							<div class="form-field">
 								<label class="form-label" for={`note-${order.id}`}>Nota de entrega</label>
@@ -484,7 +579,12 @@
 							<Button variant="secondary" size="sm" onclick={() => createInternalIncident(order.id)}>
 								Crear incidencia interna
 							</Button>
-							<Button variant="primary" size="sm" onclick={() => validateDelivery(order.id)}>
+							<Button
+								variant="primary"
+								size="sm"
+								onclick={() => validateDelivery(order.id)}
+								disabled={busyDeliveryOrders[order.id]}
+							>
 								Validar entrega
 							</Button>
 						</div>
@@ -541,10 +641,44 @@
 		gap: 1.25rem;
 	}
 
+	.route-toggle-wrap {
+		display: grid;
+		justify-items: end;
+		gap: 0.35rem;
+	}
+
+	.route-selection-hint {
+		margin: 0;
+		font-size: 0.78rem;
+		color: #fbbf24;
+	}
+
+	.route-clear-btn {
+		font-size: 0.78rem;
+		font-weight: 600;
+		color: #cbd5e1;
+		background: transparent;
+		border: 1px solid #475569;
+		border-radius: 0.35rem;
+		padding: 0.35rem 0.55rem;
+		cursor: pointer;
+	}
+
+	.route-clear-btn:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+
 	.text-secondary {
 		margin: 0;
 		font-size: 0.92rem;
 		color: #94a3b8;
+	}
+
+	.error-text {
+		margin: 0 0 0.85rem;
+		font-size: 0.82rem;
+		color: #fca5a5;
 	}
 
 
@@ -553,6 +687,40 @@
 		background: #0f172a;
 		border: 1px solid #334155;
 		border-radius: 0.45rem;
+	}
+
+	.route-card-selectable {
+		display: grid;
+		gap: 0.35rem;
+	}
+
+	.route-card-selectable.selected {
+		border-color: #60a5fa;
+		box-shadow: inset 0 0 0 1px rgba(96, 165, 250, 0.3);
+	}
+
+	.route-select-btn {
+		justify-self: flex-start;
+		margin-top: 0.35rem;
+		font-size: 0.78rem;
+		font-weight: 600;
+		color: #bfdbfe;
+		background: rgba(59, 130, 246, 0.2);
+		border: 1px solid rgba(59, 130, 246, 0.35);
+		border-radius: 0.35rem;
+		padding: 0.35rem 0.55rem;
+		cursor: pointer;
+	}
+
+	.route-select-btn:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+
+	.route-selected-label {
+		margin: 0 0 0.6rem;
+		font-size: 0.82rem;
+		color: #bfdbfe;
 	}
 
 	.delivery-label {
@@ -752,6 +920,39 @@
 		margin: 0;
 		font-size: 0.82rem;
 		color: #94a3b8;
+	}
+
+	.order-notes-box {
+		padding: 0.75rem;
+		border: 1px solid #334155;
+		border-radius: 0.4rem;
+		background: #0b1322;
+	}
+
+	.order-notes-list {
+		margin-top: 0.5rem;
+		display: grid;
+		gap: 0.45rem;
+	}
+
+	.order-note-entry {
+		padding: 0.45rem 0.55rem;
+		background: #0f172a;
+		border: 1px solid #334155;
+		border-radius: 0.35rem;
+	}
+
+	.order-note-meta {
+		margin: 0;
+		font-size: 0.78rem;
+		color: #cbd5e1;
+	}
+
+	.order-note-text {
+		margin: 0.2rem 0 0;
+		font-size: 0.82rem;
+		color: #e2e8f0;
+		white-space: pre-wrap;
 	}
 
 	.delivery-form-grid {

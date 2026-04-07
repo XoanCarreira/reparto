@@ -128,6 +128,15 @@ function mapOrderRow(row) {
 		id: Number(row.id),
 		clientId: Number(row.client_id),
 		status: row.status, // pending, delivered, cancelled, returned
+		isManual: row.is_manual === true,
+		deliveryOrder:
+			row.delivery_order === null || row.delivery_order === undefined
+				? null
+				: Number(row.delivery_order),
+		specialDeliveryId:
+			row.special_delivery_id === null || row.special_delivery_id === undefined
+				? null
+				: Number(row.special_delivery_id),
 		// Mapear artículos anidados de order_items
 		items: Array.isArray(row.order_items)
 			? row.order_items.map((item) => ({
@@ -147,6 +156,19 @@ function mapOrderRow(row) {
 		cancelRequestedAt: row.cancel_requested_at ? new Date(row.cancel_requested_at) : null,
 		cancelDecisionAt: row.cancel_decision_at ? new Date(row.cancel_decision_at) : null,
 		cancelSource: row.cancel_source || null // client, admin
+	};
+}
+
+function mapSpecialDeliveryRow(row) {
+	return {
+		id: Number(row.id),
+		name: row.name || '',
+		notes: row.notes || '',
+		staffId: row.staff_id == null ? null : Number(row.staff_id),
+		status: row.status || 'active',
+		createdBy: row.created_by == null ? null : Number(row.created_by),
+		createdAt: row.created_at ? new Date(row.created_at) : new Date(),
+		updatedAt: row.updated_at ? new Date(row.updated_at) : new Date()
 	};
 }
 
@@ -213,10 +235,15 @@ function mapIncidentRow(row) {
  * @returns {Object} Objeto personal de entrega normalizado
  */
 function mapDeliveryStaffRow(row) {
+	const zoneIds = Array.isArray(row.zoneIds)
+		? row.zoneIds.map((id) => Number(id)).filter((id) => Number.isFinite(id))
+		: (row.zoneId != null && row.zoneId !== '' ? [Number(row.zoneId)] : []);
+
 	return {
 		id: Number(row.id),
 		name: row.name || '',
-		zoneId: row.zoneId != null ? Number(row.zoneId) : null, // Zona asignada
+		zoneId: zoneIds[0] ?? null, // Compatibilidad con código legado
+		zoneIds, // Rutas asignadas (soporte multi-ruta)
 		email: row.email || '',
 		password: '', // Nunca retornar contraseña
 		phone: row.phone || '',
@@ -367,10 +394,64 @@ export async function deleteClientDb(clientId) {
  * @returns {Promise<Array>} Array de órdenes normalizadas con sus artículos
  */
 export async function fetchOrdersDb() {
-	const rows = await request(
-		'orders?select=id,client_id,status,created_at,scheduled_delivery,delivered_at,total_amount,notes,delivery_note,delivery_note_at,cancel_request_status,cancel_requested_at,cancel_decision_at,cancel_source,order_items(product_id,quantity,unit_price)&order=id.asc'
-	);
-	return Array.isArray(rows) ? rows.map(mapOrderRow) : [];
+	const selectWithDeliveryOrder =
+		'orders?select=id,client_id,status,is_manual,delivery_order,special_delivery_id,created_at,scheduled_delivery,delivered_at,total_amount,notes,delivery_note,delivery_note_at,cancel_request_status,cancel_requested_at,cancel_decision_at,cancel_source,order_items(product_id,quantity,unit_price)&order=id.asc';
+	const selectLegacy =
+		'orders?select=id,client_id,status,is_manual,special_delivery_id,created_at,scheduled_delivery,delivered_at,total_amount,notes,delivery_note,delivery_note_at,cancel_request_status,cancel_requested_at,cancel_decision_at,cancel_source,order_items(product_id,quantity,unit_price)&order=id.asc';
+
+	try {
+		const rows = await request(selectWithDeliveryOrder);
+		return Array.isArray(rows) ? rows.map(mapOrderRow) : [];
+	} catch (error) {
+		const raw = String(error?.message || '');
+		const isMissingDeliveryOrderColumn =
+			raw.includes('"code":"42703"') &&
+			raw.includes('column orders.delivery_order does not exist');
+
+		if (!isMissingDeliveryOrderColumn) {
+			throw error;
+		}
+
+		console.warn(
+			'La columna orders.delivery_order no existe todavía en la base de datos. Usando consulta legacy de pedidos.'
+		);
+
+		const legacyRows = await request(selectLegacy);
+		return Array.isArray(legacyRows) ? legacyRows.map(mapOrderRow) : [];
+	}
+}
+
+export async function fetchSpecialDeliveriesDb() {
+	const rows = await request('special_deliveries?select=*&order=id.desc');
+	return Array.isArray(rows) ? rows.map(mapSpecialDeliveryRow) : [];
+}
+
+export async function createSpecialDeliveryDb(payload) {
+	const rows = await request('special_deliveries', {
+		method: 'POST',
+		headers: { Prefer: 'return=representation' },
+		body: {
+			name: String(payload.name || '').trim(),
+			notes: String(payload.notes || '').trim() || null,
+			staff_id: payload.staffId == null ? null : Number(payload.staffId),
+			status: payload.status || 'active',
+			created_by: payload.createdBy == null ? null : Number(payload.createdBy)
+		}
+	});
+
+	if (!Array.isArray(rows) || rows.length === 0) {
+		throw new Error('No se pudo crear la entrega especial en Supabase');
+	}
+
+	return mapSpecialDeliveryRow(rows[0]);
+}
+
+export async function patchSpecialDeliveryDb(specialDeliveryId, patch) {
+	await request(`special_deliveries?id=eq.${encodeURIComponent(specialDeliveryId)}`, {
+		method: 'PATCH',
+		headers: { Prefer: 'return=minimal' },
+		body: patch
+	});
 }
 
 /**
@@ -396,6 +477,11 @@ export async function insertOrderWithItemsDb(order) {
 			id: order.id,
 			client_id: order.clientId,
 			status: order.status,
+			is_manual: order.isManual === true,
+			special_delivery_id:
+				order.specialDeliveryId === null || order.specialDeliveryId === undefined
+					? null
+					: Number(order.specialDeliveryId),
 			created_at: new Date(order.createdAt).toISOString(),
 			scheduled_delivery: order.scheduledDelivery
 				? new Date(order.scheduledDelivery).toISOString()
@@ -431,6 +517,32 @@ export async function insertOrderWithItemsDb(order) {
 	}
 }
 
+export async function createManualOrderDb({ clientId, notes, specialDeliveryId, items }) {
+	const rows = await request('rpc/app_admin_create_manual_order', {
+		method: 'POST',
+		body: {
+			p_client_id: Number(clientId),
+			p_notes: String(notes || ''),
+			p_special_delivery_id:
+				specialDeliveryId === null || specialDeliveryId === undefined || specialDeliveryId === ''
+					? null
+					: Number(specialDeliveryId),
+			p_items: Array.isArray(items)
+				? items.map((item) => ({
+					productId: Number(item.productId),
+					quantity: Number(item.quantity)
+				}))
+				: []
+		}
+	});
+
+	if (!Array.isArray(rows) || rows.length === 0 || !rows[0]?.order_id) {
+		throw new Error('No se pudo crear pedido manual en RPC de Supabase');
+	}
+
+	return Number(rows[0].order_id);
+}
+
 /**
  * Actualiza parcialmente una orden (PATCH).
  * Solo actualiza los campos incluidos en el objeto patch.
@@ -443,6 +555,23 @@ export async function patchOrderDb(orderId, patch) {
 		method: 'PATCH',
 		headers: { Prefer: 'return=minimal' },
 		body: patch
+	});
+}
+
+export async function reorderDeliveryOrdersDb(orderIds) {
+	const normalizedOrderIds = Array.from(
+		new Set((orderIds || []).map((id) => Number(id)).filter((id) => Number.isFinite(id)))
+	);
+
+	if (normalizedOrderIds.length === 0) {
+		return;
+	}
+
+	await request('rpc/app_admin_reorder_delivery_orders', {
+		method: 'POST',
+		body: {
+			p_order_ids: normalizedOrderIds
+		}
 	});
 }
 
@@ -658,13 +787,50 @@ export async function fetchDeliveryStaffDb() {
 }
 
 /**
+ * Reemplaza por completo la asignación de zonas de un repartidor.
+ * Persiste en la tabla puente delivery_staff_zones.
+ * @param {number} staffId - ID del repartidor
+ * @param {number[]} zoneIds - IDs de zona a mantener asignadas
+ * @returns {Promise<void>}
+ */
+export async function replaceDeliveryStaffZonesDb(staffId, zoneIds = []) {
+	const normalizedStaffId = Number(staffId);
+	const normalizedZoneIds = Array.from(
+		new Set(
+			(zoneIds || [])
+				.map((zoneId) => Number(zoneId))
+				.filter((zoneId) => Number.isFinite(zoneId))
+		)
+	);
+
+	await request(`delivery_staff_zones?staff_id=eq.${encodeURIComponent(normalizedStaffId)}`, {
+		method: 'DELETE',
+		headers: { Prefer: 'return=minimal' }
+	});
+
+	if (normalizedZoneIds.length === 0) {
+		return;
+	}
+
+	await request('delivery_staff_zones', {
+		method: 'POST',
+		headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+		body: normalizedZoneIds.map((zoneId) => ({
+			staff_id: normalizedStaffId,
+			zone_id: zoneId
+		}))
+	});
+}
+
+/**
  * Inserta o actualiza personal de entrega (upsert).
  * Crea/actualiza tanto el registro de usuario como el perfil de entrega.
  * @param {Object} staff - Objeto personal de entrega a guardar
  * @param {number} staff.id - ID del personal
  * @param {string} staff.email - Email del personal de entrega
  * @param {string} staff.name - Nombre del personal
- * @param {number} [staff.zoneId] - Zona asignada
+ * @param {number} [staff.zoneId] - Zona principal (compatibilidad)
+ * @param {number[]} [staff.zoneIds] - Zonas asignadas
  * @param {string} [staff.phone] - Teléfono del personal
  * @param {string} [staff.vehicle] - Descripción del vehículo asignado
  * @param {string} staff.status - Estado (active, inactive)
@@ -673,13 +839,22 @@ export async function fetchDeliveryStaffDb() {
  */
 export async function upsertDeliveryStaffDb(staff) {
 	const normalizedPassword = String(staff.password || '').trim();
+	const normalizedZoneIds = Array.from(
+		new Set(
+			(Array.isArray(staff.zoneIds) ? staff.zoneIds : [staff.zoneId])
+				.map((zoneId) => Number(zoneId))
+				.filter((zoneId) => Number.isFinite(zoneId))
+		)
+	);
+	const primaryZoneId = normalizedZoneIds[0] ?? null;
+
 	// Preparar datos de usuario base
 	const userPayload = {
 		id: staff.id,
 		email: String(staff.email || '').trim().toLowerCase(),
 		name: String(staff.name || '').trim(),
 		role: 'delivery',
-		zone_id: staff.zoneId == null || staff.zoneId === '' ? null : Number(staff.zoneId),
+		zone_id: primaryZoneId,
 		phone: String(staff.phone || '').trim() || null
 	};
 
@@ -705,6 +880,8 @@ export async function upsertDeliveryStaffDb(staff) {
 			status: staff.status || 'active'
 		}
 	});
+
+	await replaceDeliveryStaffZonesDb(staff.id, normalizedZoneIds);
 }
 
 /**

@@ -123,7 +123,12 @@
 	 */
 	function getUncoveredRoutesCount() {
 		return allZones.filter(
-			(zone) => !allStaff.some((staff) => Number(staff.zoneId) === Number(zone.id))
+			(zone) =>
+				!allStaff.some((staff) =>
+					Array.isArray(staff.zoneIds)
+						? staff.zoneIds.some((zoneId) => Number(zoneId) === Number(zone.id))
+						: Number(staff.zoneId) === Number(zone.id)
+				)
 		).length;
 	}
 

@@ -11,9 +11,14 @@ import {
 	deleteClientDb,
 	fetchOrdersDb,
 	insertOrderWithItemsDb,
+	createManualOrderDb,
 	patchOrderDb,
+	reorderDeliveryOrdersDb,
 	deleteOrderDb,
 	deleteCancelledOrdersByClientDb,
+	fetchSpecialDeliveriesDb,
+	createSpecialDeliveryDb,
+	patchSpecialDeliveryDb,
 	fetchProductsDb,
 	upsertProductDb,
 	deleteProductDb,
@@ -594,6 +599,538 @@ function createOrdersStore() {
 			.catch((error) => console.error('No se pudieron cargar pedidos desde Supabase:', error));
 	}
 
+	const allowedOrderNoteRoles = ['admin', 'client', 'delivery'];
+
+	function parseOrderNotesTimeline(rawNotes, fallbackRole = 'client', fallbackCreatedAt = null) {
+		const normalizedFallbackRole = allowedOrderNoteRoles.includes(fallbackRole) ? fallbackRole : 'client';
+		const normalizedRaw = String(rawNotes || '').trim();
+		if (!normalizedRaw) {
+			return [];
+		}
+
+		if (!normalizedRaw.startsWith('[')) {
+			return [
+				{
+					text: normalizedRaw,
+					role: normalizedFallbackRole,
+					createdAt: fallbackCreatedAt ? new Date(fallbackCreatedAt).toISOString() : new Date().toISOString()
+				}
+			];
+		}
+
+		try {
+			const parsed = JSON.parse(normalizedRaw);
+			if (!Array.isArray(parsed)) {
+				return [];
+			}
+
+			return parsed
+				.map((entry) => {
+					if (!entry || typeof entry !== 'object') {
+						return null;
+					}
+
+					const text = String(entry.text || '').trim();
+					if (!text) {
+						return null;
+					}
+
+					const role = allowedOrderNoteRoles.includes(entry.role) ? entry.role : normalizedFallbackRole;
+					const createdAt = entry.createdAt
+						? new Date(entry.createdAt).toISOString()
+						: new Date().toISOString();
+
+					return { text, role, createdAt };
+				})
+				.filter(Boolean);
+		} catch {
+			return [
+				{
+					text: normalizedRaw,
+					role: normalizedFallbackRole,
+					createdAt: fallbackCreatedAt ? new Date(fallbackCreatedAt).toISOString() : new Date().toISOString()
+				}
+			];
+		}
+	}
+
+	function appendOrderNoteTimeline(rawNotes, text, role, fallbackRole = 'client', fallbackCreatedAt = null) {
+		const normalizedText = String(text || '').trim();
+		if (!normalizedText) {
+			return String(rawNotes || '').trim();
+		}
+
+		const normalizedRole = allowedOrderNoteRoles.includes(role) ? role : 'client';
+		const timeline = parseOrderNotesTimeline(rawNotes, fallbackRole, fallbackCreatedAt);
+		timeline.push({
+			text: normalizedText,
+			role: normalizedRole,
+			createdAt: new Date().toISOString()
+		});
+
+		return JSON.stringify(timeline);
+	}
+
+	const setStatusDbFirst = async (orderId, newStatus) => {
+		let previousOrder = null;
+
+		subscribe((orders) => {
+			previousOrder = orders.find((order) => Number(order.id) === Number(orderId)) || null;
+		})();
+
+		if (!previousOrder) {
+			return { success: false, error: 'Pedido no encontrado' };
+		}
+
+		const deliveredAt = newStatus === 'delivered' ? new Date() : null;
+
+		if (isDatabaseEnabled) {
+			try {
+				await patchOrderDb(orderId, {
+					status: newStatus,
+					delivered_at: deliveredAt ? deliveredAt.toISOString() : null,
+					cancel_source: newStatus === 'cancelled' ? (previousOrder.cancelSource || 'admin') : null
+				});
+			} catch (error) {
+				console.error('No se pudo actualizar estado del pedido en Supabase:', error);
+				return { success: false, error: error?.message || 'No se pudo actualizar el pedido' };
+			}
+		}
+
+		update((orders) =>
+			orders.map((order) => {
+				if (Number(order.id) !== Number(orderId)) return order;
+				return {
+					...order,
+					status: newStatus,
+					deliveredAt: newStatus === 'delivered' ? deliveredAt : order.deliveredAt,
+					cancelSource:
+						newStatus === 'cancelled' ? (order.cancelSource || 'admin') : order.cancelSource
+				};
+			})
+		);
+
+		if (
+			previousOrder.status !== 'delivered' &&
+			newStatus === 'delivered' &&
+			Array.isArray(previousOrder.items)
+		) {
+			previousOrder.items.forEach((item) => {
+				productsStore.decreaseStock(item.productId, item.quantity);
+			});
+		}
+
+		return { success: true };
+	};
+
+	const reorderDeliveryOrdersDbFirst = async (orderIds) => {
+		const normalizedOrderIds = Array.from(
+			new Set((orderIds || []).map((id) => Number(id)).filter((id) => Number.isFinite(id)))
+		);
+
+		if (normalizedOrderIds.length === 0) {
+			return { success: false, error: 'No hay pedidos para reordenar' };
+		}
+
+		if (isDatabaseEnabled) {
+			try {
+				await reorderDeliveryOrdersDb(normalizedOrderIds);
+			} catch (error) {
+				console.error('No se pudo reordenar el reparto en Supabase:', error);
+				return { success: false, error: error?.message || 'No se pudo reordenar el reparto' };
+			}
+		}
+
+		update((orders) =>
+			orders.map((order) => {
+				const position = normalizedOrderIds.indexOf(Number(order.id));
+				if (position === -1) return order;
+
+				return {
+					...order,
+					deliveryOrder: position + 1
+				};
+			})
+		);
+
+		return { success: true };
+	};
+
+	const updateDeliveryNoteDbFirst = async (orderId, note) => {
+		const normalizedNote = String(note || '').trim();
+		const noteAt = new Date();
+
+		if (isDatabaseEnabled) {
+			try {
+				await patchOrderDb(orderId, {
+					delivery_note: normalizedNote,
+					delivery_note_at: noteAt.toISOString()
+				});
+			} catch (error) {
+				console.error('No se pudo guardar nota de entrega en Supabase:', error);
+				return { success: false, error: error?.message || 'No se pudo guardar la nota de entrega' };
+			}
+		}
+
+		update((orders) =>
+			orders.map((order) =>
+				Number(order.id) === Number(orderId)
+					? { ...order, deliveryNote: normalizedNote, deliveryNoteAt: noteAt }
+					: order
+			)
+		);
+
+		return { success: true };
+	};
+
+	const completeDeliveryDbFirst = async (orderId, note) => {
+		let previousOrder = null;
+
+		subscribe((orders) => {
+			previousOrder = orders.find((order) => Number(order.id) === Number(orderId)) || null;
+		})();
+
+		if (!previousOrder) {
+			return { success: false, error: 'Pedido no encontrado' };
+		}
+
+		const normalizedNote = String(note || '').trim();
+		const deliveredAt = new Date();
+		const noteAt = new Date();
+		const nextNotes = normalizedNote
+			? appendOrderNoteTimeline(
+					previousOrder.notes,
+					normalizedNote,
+					'delivery',
+					previousOrder.isManual ? 'admin' : 'client',
+					previousOrder.createdAt
+				)
+			: previousOrder.notes;
+
+		if (isDatabaseEnabled) {
+			try {
+				await patchOrderDb(orderId, {
+					status: 'delivered',
+					delivered_at: deliveredAt.toISOString(),
+					notes: nextNotes,
+					delivery_note: normalizedNote,
+					delivery_note_at: noteAt.toISOString()
+				});
+			} catch (error) {
+				console.error('No se pudo confirmar entrega en Supabase:', error);
+				return { success: false, error: error?.message || 'No se pudo confirmar la entrega' };
+			}
+		}
+
+		update((orders) =>
+			orders.map((order) =>
+				Number(order.id) === Number(orderId)
+					? {
+						...order,
+						status: 'delivered',
+						deliveredAt,
+						notes: nextNotes,
+						deliveryNote: normalizedNote,
+						deliveryNoteAt: noteAt
+					}
+					: order
+			)
+		);
+
+		if (previousOrder.status !== 'delivered' && Array.isArray(previousOrder.items)) {
+			previousOrder.items.forEach((item) => {
+				productsStore.decreaseStock(item.productId, item.quantity);
+			});
+		}
+
+		return { success: true };
+	};
+
+	const createManualDbFirst = async (clientId, items, notes = '', specialDeliveryId = null) => {
+		const parsedClientId = Number(clientId);
+		const processedItems = (items || [])
+			.map((item) => ({
+				productId: Number(item.productId),
+				quantity: Number(item.quantity)
+			}))
+			.filter((item) => Number.isFinite(item.productId) && Number.isFinite(item.quantity) && item.quantity > 0);
+
+		if (!Number.isFinite(parsedClientId) || processedItems.length === 0) {
+			return { success: false, error: 'Datos de pedido manual inválidos' };
+		}
+
+		const client = clientsStore.getAll().find((c) => Number(c.id) === parsedClientId);
+		if (!client) {
+			return { success: false, error: 'Cliente no encontrado' };
+		}
+
+		let orderId = Math.max(...ordersStore.getAll().map((o) => Number(o.id)), 1000) + 1;
+		const zone = zonesStore.getById(client.zone);
+		const scheduledDelivery = zone?.nextDelivery || null;
+
+		let totalAmount = 0;
+		const pricedItems = processedItems.map((item) => {
+			const product = productsStore.getById(item.productId);
+			const unitPrice = Number(product?.price || 0);
+			totalAmount += unitPrice * Number(item.quantity);
+			return {
+				productId: item.productId,
+				quantity: item.quantity,
+				unitPrice
+			};
+		});
+
+		const serializedManualNotes = appendOrderNoteTimeline('', notes, 'admin', 'admin');
+
+		const draftOrder = {
+			id: orderId,
+			clientId: parsedClientId,
+			status: 'pending',
+			isManual: true,
+			deliveryOrder: null,
+			specialDeliveryId:
+				specialDeliveryId === null || specialDeliveryId === undefined || specialDeliveryId === ''
+					? null
+					: Number(specialDeliveryId),
+			items: pricedItems,
+			createdAt: new Date(),
+			scheduledDelivery,
+			totalAmount,
+			notes: serializedManualNotes,
+			cancelRequestStatus: null,
+			cancelRequestedAt: null,
+			cancelDecisionAt: null,
+			cancelSource: null
+		};
+
+		if (isDatabaseEnabled) {
+			try {
+				orderId = await createManualOrderDb({
+					clientId: parsedClientId,
+					notes: serializedManualNotes,
+					specialDeliveryId,
+					items: processedItems
+				});
+				draftOrder.id = orderId;
+			} catch (error) {
+				console.error('No se pudo crear pedido manual en Supabase:', error);
+				return { success: false, error: error?.message || 'No se pudo crear el pedido manual' };
+			}
+		}
+
+		update((orders) => [...orders, draftOrder]);
+		return { success: true, orderId: draftOrder.id };
+	};
+
+	const assignSpecialDeliveryDbFirst = async (orderIds, specialDeliveryId) => {
+		const normalizedOrderIds = Array.from(
+			new Set((orderIds || []).map((id) => Number(id)).filter((id) => Number.isFinite(id)))
+		);
+
+		if (normalizedOrderIds.length === 0) {
+			return { success: true };
+		}
+
+		const normalizedSpecialDeliveryId =
+			specialDeliveryId === null || specialDeliveryId === undefined || specialDeliveryId === ''
+				? null
+				: Number(specialDeliveryId);
+
+		if (isDatabaseEnabled) {
+			try {
+				for (const orderId of normalizedOrderIds) {
+					await patchOrderDb(orderId, {
+						special_delivery_id: normalizedSpecialDeliveryId,
+						delivery_order: null
+					});
+				}
+			} catch (error) {
+				console.error('No se pudo asignar entrega especial a pedidos en Supabase:', error);
+				return { success: false, error: error?.message || 'No se pudo agrupar los pedidos' };
+			}
+		}
+
+		update((orders) =>
+			orders.map((order) =>
+				normalizedOrderIds.includes(Number(order.id))
+					? { ...order, specialDeliveryId: normalizedSpecialDeliveryId, deliveryOrder: null }
+					: order
+			)
+		);
+
+		return { success: true };
+	};
+
+	const resolveCancellationRequestDbFirst = async (orderId, approved) => {
+		let previousOrder = null;
+
+		subscribe((orders) => {
+			previousOrder = orders.find((order) => Number(order.id) === Number(orderId)) || null;
+		})();
+
+		if (!previousOrder || previousOrder.cancelRequestStatus !== 'pending') {
+			return { success: false, error: 'Solicitud de anulación no válida' };
+		}
+
+		const decisionAt = new Date();
+
+		if (isDatabaseEnabled) {
+			try {
+				if (approved) {
+					await patchOrderDb(orderId, {
+						status: 'cancelled',
+						cancel_source: 'client',
+						cancel_request_status: 'approved',
+						cancel_decision_at: decisionAt.toISOString()
+					});
+				} else {
+					await patchOrderDb(orderId, {
+						cancel_request_status: 'rejected',
+						cancel_decision_at: decisionAt.toISOString()
+					});
+				}
+			} catch (error) {
+				console.error('No se pudo resolver solicitud de anulación en Supabase:', error);
+				return { success: false, error: error?.message || 'No se pudo resolver la solicitud' };
+			}
+		}
+
+		update((orders) =>
+			orders.map((order) => {
+				if (Number(order.id) !== Number(orderId) || order.cancelRequestStatus !== 'pending') return order;
+				if (approved) {
+					return {
+						...order,
+						status: 'cancelled',
+						cancelSource: 'client',
+						cancelRequestStatus: 'approved',
+						cancelDecisionAt: decisionAt
+					};
+				}
+
+				return {
+					...order,
+					cancelRequestStatus: 'rejected',
+					cancelDecisionAt: decisionAt
+				};
+			})
+		);
+
+		return { success: true };
+	};
+
+	const addOrderNoteDbFirst = async (orderId, text, role = 'admin') => {
+		let targetOrder = null;
+
+		subscribe((orders) => {
+			targetOrder = orders.find((order) => Number(order.id) === Number(orderId)) || null;
+		})();
+
+		if (!targetOrder) {
+			return { success: false, error: 'Pedido no encontrado' };
+		}
+
+		const normalizedText = String(text || '').trim();
+		if (!normalizedText) {
+			return { success: false, error: 'La nota no puede estar vacía' };
+		}
+
+		const nextNotes = appendOrderNoteTimeline(
+			targetOrder.notes,
+			normalizedText,
+			role,
+			targetOrder.isManual ? 'admin' : 'client',
+			targetOrder.createdAt
+		);
+
+		if (isDatabaseEnabled) {
+			try {
+				await patchOrderDb(orderId, { notes: nextNotes });
+			} catch (error) {
+				console.error('No se pudo guardar nota del pedido en Supabase:', error);
+				return { success: false, error: error?.message || 'No se pudo guardar la nota' };
+			}
+		}
+
+		update((orders) =>
+			orders.map((order) =>
+				Number(order.id) === Number(orderId)
+					? {
+						...order,
+						notes: nextNotes
+					}
+					: order
+			)
+		);
+
+		return { success: true };
+	};
+
+	const createDbFirst = async (clientId, items, notes = '') => {
+		let orderId = Math.max(...ordersStore.getAll().map((o) => Number(o.id)), 1000) + 1;
+		const parsedClientId = Number(clientId);
+
+		const processedItems = (items || [])
+			.map((item) => {
+				const product = productsStore.getById(item.productId);
+				const unitPrice = Number(product?.price || 0);
+				return {
+					productId: Number(item.productId),
+					quantity: Number(item.quantity),
+					unitPrice
+				};
+			})
+			.filter(
+				(item) =>
+					Number.isFinite(item.productId) && Number.isFinite(item.quantity) && item.quantity > 0
+			);
+
+		if (!Number.isFinite(parsedClientId) || processedItems.length === 0) {
+			return { success: false, error: 'Datos de pedido inválidos' };
+		}
+
+		const client = clientsStore.getAll().find((c) => Number(c.id) === parsedClientId);
+		if (!client) {
+			return { success: false, error: 'Cliente no encontrado' };
+		}
+
+		const totalAmount = processedItems.reduce(
+			(sum, item) => sum + Number(item.unitPrice || 0) * Number(item.quantity || 0),
+			0
+		);
+
+		const clientZone = zonesStore.getById(client?.zone);
+		const scheduledDelivery = clientZone?.nextDelivery || null;
+
+		const createdOrder = {
+			id: orderId,
+			clientId: parsedClientId,
+			status: 'pending',
+			deliveryOrder: null,
+			items: processedItems,
+			createdAt: new Date(),
+			scheduledDelivery,
+			totalAmount,
+			notes: appendOrderNoteTimeline('', notes, 'client', 'client'),
+			cancelRequestStatus: null,
+			cancelRequestedAt: null,
+			cancelDecisionAt: null,
+			cancelSource: null
+		};
+
+		if (isDatabaseEnabled) {
+			try {
+				await insertOrderWithItemsDb(createdOrder);
+			} catch (error) {
+				console.error('No se pudo guardar el pedido en Supabase:', error);
+				return { success: false, error: error?.message || 'No se pudo crear el pedido en base de datos' };
+			}
+		}
+
+		update((orders) => [...orders, createdOrder]);
+		return { success: true, orderId };
+	};
+
 	return {
 		subscribe,
 		getAll: () => {
@@ -648,11 +1185,12 @@ function createOrdersStore() {
 					id: newOrderId,
 					clientId: Number(clientId),
 					status: 'pending',
+					deliveryOrder: null,
 					items: processedItems,
 					createdAt: new Date(),
 					scheduledDelivery,
 					totalAmount,
-					notes,
+					notes: appendOrderNoteTimeline('', notes, 'client', 'client'),
 					cancelRequestStatus: null,
 					cancelRequestedAt: null,
 					cancelDecisionAt: null,
@@ -710,6 +1248,8 @@ function createOrdersStore() {
 				});
 			}
 		},
+		setStatusDbFirst,
+		reorderDeliveryOrdersDbFirst,
 		markInDelivery: (orderId) => {
 			update((orders) =>
 				orders.map((o) => (Number(o.id) === Number(orderId) ? { ...o, status: 'in_delivery' } : o))
@@ -721,6 +1261,7 @@ function createOrdersStore() {
 				);
 			}
 		},
+		markInDeliveryDbFirst: async (orderId) => setStatusDbFirst(orderId, 'in_delivery'),
 		updateDeliveryNote: (orderId, note) => {
 			const noteAt = new Date();
 
@@ -739,6 +1280,13 @@ function createOrdersStore() {
 				}).catch((error) => console.error('No se pudo guardar nota de entrega en Supabase:', error));
 			}
 		},
+		updateDeliveryNoteDbFirst,
+		completeDeliveryDbFirst,
+		createDbFirst,
+		createManualDbFirst,
+		addOrderNoteDbFirst,
+		assignSpecialDeliveryDbFirst,
+		resolveCancellationRequestDbFirst,
 		requestCancellation: (orderId, clientId) => {
 			let changed = false;
 			const requestedAt = new Date();
@@ -867,6 +1415,83 @@ function createOrdersStore() {
 				}));
 			})();
 			return totals;
+		}
+	};
+}
+
+function createSpecialDeliveriesStore() {
+	const { subscribe, update, set } = writable([]);
+
+	if (isDatabaseEnabled) {
+		void fetchSpecialDeliveriesDb()
+			.then((rows) => set(rows))
+			.catch((error) => console.error('No se pudieron cargar entregas especiales desde Supabase:', error));
+	}
+
+	return {
+		subscribe,
+		createDbFirst: async (payload) => {
+			const normalizedName = String(payload?.name || '').trim();
+			if (!normalizedName) {
+				return { success: false, error: 'El nombre de la entrega especial es obligatorio' };
+			}
+
+			let createdSpecialDelivery = null;
+			if (isDatabaseEnabled) {
+				try {
+					createdSpecialDelivery = await createSpecialDeliveryDb(payload);
+				} catch (error) {
+					console.error('No se pudo crear entrega especial en Supabase:', error);
+					return { success: false, error: error?.message || 'No se pudo crear la entrega especial' };
+				}
+			} else {
+				const allSpecialDeliveries = [];
+				subscribe((rows) => {
+					allSpecialDeliveries.push(...rows);
+				})();
+				const nextId = Math.max(...allSpecialDeliveries.map((row) => Number(row.id)), 0) + 1;
+				createdSpecialDelivery = {
+					id: nextId,
+					name: normalizedName,
+					notes: String(payload?.notes || '').trim(),
+					staffId: payload?.staffId == null ? null : Number(payload.staffId),
+					status: 'active',
+					createdBy: payload?.createdBy == null ? null : Number(payload.createdBy),
+					createdAt: new Date(),
+					updatedAt: new Date()
+				};
+			}
+
+			update((rows) => [createdSpecialDelivery, ...rows]);
+			return { success: true, specialDelivery: createdSpecialDelivery };
+		},
+		updateDbFirst: async (specialDeliveryId, patch) => {
+			if (isDatabaseEnabled) {
+				try {
+					await patchSpecialDeliveryDb(specialDeliveryId, patch);
+				} catch (error) {
+					console.error('No se pudo actualizar entrega especial en Supabase:', error);
+					return { success: false, error: error?.message || 'No se pudo actualizar la entrega especial' };
+				}
+			}
+
+			update((rows) =>
+				rows.map((row) =>
+					Number(row.id) === Number(specialDeliveryId)
+						? {
+							...row,
+							...patch,
+							staffId:
+								patch.staff_id !== undefined
+									? (patch.staff_id == null ? null : Number(patch.staff_id))
+									: (patch.staffId !== undefined ? (patch.staffId == null ? null : Number(patch.staffId)) : row.staffId),
+							updatedAt: new Date()
+						}
+						: row
+				)
+			);
+
+			return { success: true };
 		}
 	};
 }
@@ -1034,6 +1659,24 @@ function createZoneClientMetricsStore() {
 function createDeliveryStaffStore() {
 	const { subscribe, update, set } = writable([]);
 
+	function normalizeZoneIds(zoneIdsLike) {
+		if (!Array.isArray(zoneIdsLike)) {
+			if (zoneIdsLike === null || zoneIdsLike === undefined || zoneIdsLike === '') {
+				return [];
+			}
+			const parsedSingle = Number(zoneIdsLike);
+			return Number.isFinite(parsedSingle) ? [parsedSingle] : [];
+		}
+
+		return Array.from(
+			new Set(
+				zoneIdsLike
+					.map((zoneId) => Number(zoneId))
+					.filter((zoneId) => Number.isFinite(zoneId))
+			)
+		);
+	}
+
 	if (isDatabaseEnabled) {
 		void fetchDeliveryStaffDb()
 			.then((dbStaff) => set(dbStaff))
@@ -1052,14 +1695,18 @@ function createDeliveryStaffStore() {
 		getFreeStaff: () => {
 			let freeStaff = [];
 			subscribe((staff) => {
-				freeStaff = staff.filter((s) => s.zoneId === null);
+				freeStaff = staff.filter((s) => !Array.isArray(s.zoneIds) || s.zoneIds.length === 0);
 			})();
 			return freeStaff;
 		},
 		getByZone: (zoneId) => {
 			let zoneStaff = [];
 			subscribe((staff) => {
-				zoneStaff = staff.filter((s) => Number(s.zoneId) === Number(zoneId));
+				zoneStaff = staff.filter((s) =>
+					Array.isArray(s.zoneIds)
+						? s.zoneIds.some((assignedZoneId) => Number(assignedZoneId) === Number(zoneId))
+						: Number(s.zoneId) === Number(zoneId)
+				);
 			})();
 			return zoneStaff;
 		},
@@ -1070,22 +1717,77 @@ function createDeliveryStaffStore() {
 			})();
 			return staff;
 		},
-		assignZone: (staffId, zoneId) => {
-			let updatedStaff = null;
+		assignZoneDbFirst: async (staffId, zoneId) => {
+			let targetStaff = null;
+
+			subscribe((staff) => {
+				targetStaff = staff.find((member) => Number(member.id) === Number(staffId)) || null;
+			})();
+
+			if (!targetStaff) {
+				return { success: false, error: 'Repartidor no encontrado' };
+			}
+
+			const normalizedZoneId = Number(zoneId);
+			if (!Number.isFinite(normalizedZoneId)) {
+				return { success: false, error: 'Zona inválida' };
+			}
+
+			const nextZoneIds = normalizeZoneIds([...(targetStaff.zoneIds || []), normalizedZoneId]);
+
+			if (isDatabaseEnabled) {
+				try {
+					await upsertDeliveryStaffDb({ ...targetStaff, zoneIds: nextZoneIds, zoneId: nextZoneIds[0] ?? null });
+				} catch (error) {
+					console.error('No se pudo asignar ruta al repartidor en Supabase:', error);
+					return { success: false, error: error?.message || 'No se pudo asignar la ruta' };
+				}
+			}
+
 			update((staff) =>
-				staff.map((s) => {
-					if (Number(s.id) !== Number(staffId)) return s;
-					updatedStaff = { ...s, zoneId: zoneId === null ? null : Number(zoneId) };
-					return updatedStaff;
-				})
+				staff.map((member) =>
+					Number(member.id) === Number(staffId)
+						? { ...member, zoneIds: nextZoneIds, zoneId: nextZoneIds[0] ?? null }
+						: member
+				)
 			);
 
-			if (isDatabaseEnabled && updatedStaff) {
-				// La zona se guarda sobre users.zone_id vía upsertDeliveryStaffDb
-				void upsertDeliveryStaffDb(updatedStaff).catch((error) =>
-					console.error('No se pudo reasignar repartidor en Supabase:', error)
-				);
+			return { success: true };
+		},
+		unassignZoneDbFirst: async (staffId, zoneId) => {
+			let targetStaff = null;
+
+			subscribe((staff) => {
+				targetStaff = staff.find((member) => Number(member.id) === Number(staffId)) || null;
+			})();
+
+			if (!targetStaff) {
+				return { success: false, error: 'Repartidor no encontrado' };
 			}
+
+			const normalizedZoneId = Number(zoneId);
+			const nextZoneIds = normalizeZoneIds(targetStaff.zoneIds || []).filter(
+				(assignedZoneId) => Number(assignedZoneId) !== normalizedZoneId
+			);
+
+			if (isDatabaseEnabled) {
+				try {
+					await upsertDeliveryStaffDb({ ...targetStaff, zoneIds: nextZoneIds, zoneId: nextZoneIds[0] ?? null });
+				} catch (error) {
+					console.error('No se pudo desasignar ruta del repartidor en Supabase:', error);
+					return { success: false, error: error?.message || 'No se pudo desasignar la ruta' };
+				}
+			}
+
+			update((staff) =>
+				staff.map((member) =>
+					Number(member.id) === Number(staffId)
+						? { ...member, zoneIds: nextZoneIds, zoneId: nextZoneIds[0] ?? null }
+						: member
+				)
+			);
+
+			return { success: true };
 		},
 		updateStatus: (staffId, newStatus) => {
 			let updatedStaff = null;
@@ -1113,6 +1815,15 @@ function createDeliveryStaffStore() {
 
 					previousStaff = member;
 
+					const normalizedZoneIds =
+						updates.zoneIds !== undefined
+							? normalizeZoneIds(updates.zoneIds)
+							: normalizeZoneIds(
+									updates.zoneId === '' || updates.zoneId === null || updates.zoneId === undefined
+										? member.zoneIds || []
+										: [updates.zoneId]
+								);
+
 					updatedStaff = {
 						...member,
 						...updates,
@@ -1125,10 +1836,8 @@ function createDeliveryStaffStore() {
 						phone: typeof updates.phone === 'string' ? updates.phone.trim() : member.phone,
 						vehicle: typeof updates.vehicle === 'string' ? updates.vehicle.trim() : member.vehicle,
 						status: typeof updates.status === 'string' ? updates.status : member.status,
-						zoneId:
-							updates.zoneId === '' || updates.zoneId === null || updates.zoneId === undefined
-								? null
-								: Number(updates.zoneId)
+						zoneIds: normalizedZoneIds,
+						zoneId: normalizedZoneIds[0] ?? null
 					};
 
 					return updatedStaff;
@@ -1167,10 +1876,15 @@ function createDeliveryStaffStore() {
 				const maxId = Math.max(...staff.map((item) => Number(item.id)), 200);
 				newStaffId = maxId + 1;
 
+				const normalizedZoneIds = normalizeZoneIds(
+					payload.zoneIds !== undefined ? payload.zoneIds : [payload.zoneId]
+				);
+
 				newStaffMember = {
 					id: newStaffId,
 					name: payload.name?.trim() || `Repartidor ${newStaffId}`,
-					zoneId: payload.zoneId === null || payload.zoneId === '' ? null : Number(payload.zoneId),
+					zoneIds: normalizedZoneIds,
+					zoneId: normalizedZoneIds[0] ?? null,
 					email: payload.email?.trim() || '',
 					password: payload.password?.trim() || '',
 					phone: payload.phone?.trim() || '',
@@ -1210,6 +1924,7 @@ export const productsStore = createProductsStore();
 export const zonesStore = createZonesStore();
 export const clientsStore = createClientsStore();
 export const ordersStore = createOrdersStore();
+export const specialDeliveriesStore = createSpecialDeliveriesStore();
 export const incidentsStore = createIncidentsStore();
 export const zoneClientMetricsStore = createZoneClientMetricsStore();
 export const deliveryStaffStore = createDeliveryStaffStore();

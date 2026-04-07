@@ -19,7 +19,7 @@
 		zonesStore,
 		productsStore
 	} from '$lib/stores/dataStore.js';
-	import { formatCurrency, formatDate, formatDateTime, daysUntil } from '$lib/utils/helpers.js';
+	import { buildOrderNotesTimeline, formatCurrency, formatDate, formatDateTime, daysUntil } from '$lib/utils/helpers.js';
 
 	let currentUser;
 	let allClients = $state([]);
@@ -310,6 +310,10 @@
 		if (status === 'resolved') return 'Resuelta';
 		return status;
 	}
+
+	function getOrderNotes(order) {
+		return buildOrderNotesTimeline(order);
+	}
 </script>
 
 <svelte:head>
@@ -401,6 +405,7 @@
 			<div class="orders-list">
 				{#each activeOrders as order (order.id)}
 					{@const activeIncident = getActiveIncidentForOrder(order.id)}
+					{@const orderNotes = getOrderNotes(order)}
 					<div class="order-card">
 						<div class="order-header">
 							<div>
@@ -432,6 +437,25 @@
 								<p class="summary-total">{formatCurrency(order.totalAmount)}</p>
 							</div>
 						</div>
+
+						{#if orderNotes.length > 0}
+							<div class="order-notes-box">
+								<p class="order-items-title">Notas del pedido</p>
+								<div class="order-notes-list">
+									{#each orderNotes as note (note.id)}
+										<div class="order-note-entry">
+											<p class="order-note-meta">
+												<strong>{note.author}</strong>
+												{#if note.createdAt}
+													 · {formatDateTime(note.createdAt)}
+												{/if}
+											</p>
+											<p class="order-note-text">{note.text}</p>
+										</div>
+									{/each}
+								</div>
+							</div>
+						{/if}
 
 						{#if getCancelRequestMessage(order)}
 							<p
@@ -492,6 +516,7 @@
 			<div class="delivered-list">
 				{#each deliveredOrders.slice(0, 5) as order (order.id)}
 					{@const activeIncident = getActiveIncidentForOrder(order.id)}
+					{@const orderNotes = getOrderNotes(order)}
 					<div class="delivered-card">
 						<div>
 							<p class="order-id order-id-compact">Pedido #{order.id}</p>
@@ -528,6 +553,25 @@
 									{/if}
 								</div>
 							{/if}
+
+							{#if orderNotes.length > 0}
+								<div class="order-notes-box compact">
+									<p class="order-items-title">Notas del pedido</p>
+									<div class="order-notes-list">
+										{#each orderNotes as note (note.id)}
+											<div class="order-note-entry">
+												<p class="order-note-meta">
+													<strong>{note.author}</strong>
+													{#if note.createdAt}
+														 · {formatDateTime(note.createdAt)}
+													{/if}
+												</p>
+												<p class="order-note-text">{note.text}</p>
+											</div>
+										{/each}
+									</div>
+								</div>
+							{/if}
 						</div>
 						<div class="delivered-actions">
 							<div class="summary-total-box">
@@ -557,6 +601,7 @@
 		<Card title="🚫 Pedidos Cancelados" titleClass="title-red" class="card-section">
 			<div class="delivered-list">
 				{#each clientOrders.filter((order) => order.status === 'cancelled') as order (order.id)}
+					{@const orderNotes = getOrderNotes(order)}
 					<div class="delivered-card">
 						<div>
 							<p class="order-id order-id-compact">Pedido #{order.id}</p>
@@ -566,6 +611,25 @@
 									? 'Cancelado por cliente (aprobado por administración).'
 									: 'Cancelado por administración.'}
 							</p>
+
+							{#if orderNotes.length > 0}
+								<div class="order-notes-box compact">
+									<p class="order-items-title">Notas del pedido</p>
+									<div class="order-notes-list">
+										{#each orderNotes as note (note.id)}
+											<div class="order-note-entry">
+												<p class="order-note-meta">
+													<strong>{note.author}</strong>
+													{#if note.createdAt}
+														 · {formatDateTime(note.createdAt)}
+													{/if}
+												</p>
+												<p class="order-note-text">{note.text}</p>
+											</div>
+										{/each}
+									</div>
+								</div>
+							{/if}
 						</div>
 						<div class="delivered-actions">
 							<div class="summary-total-box">
@@ -583,11 +647,31 @@
 		<Card title="↩ Pedidos Devueltos" titleClass="title-amber" class="card-section">
 			<div class="delivered-list">
 				{#each returnedOrders as order (order.id)}
+					{@const orderNotes = getOrderNotes(order)}
 					<div class="delivered-card">
 						<div>
 							<p class="order-id order-id-compact">Pedido #{order.id}</p>
 							<p class="order-date">{formatDateTime(order.deliveredAt || order.createdAt)}</p>
 							<p class="cancel-request-note pending">Pedido marcado como devuelto por administración.</p>
+
+							{#if orderNotes.length > 0}
+								<div class="order-notes-box compact">
+									<p class="order-items-title">Notas del pedido</p>
+									<div class="order-notes-list">
+										{#each orderNotes as note (note.id)}
+											<div class="order-note-entry">
+												<p class="order-note-meta">
+													<strong>{note.author}</strong>
+													{#if note.createdAt}
+														 · {formatDateTime(note.createdAt)}
+													{/if}
+												</p>
+												<p class="order-note-text">{note.text}</p>
+											</div>
+										{/each}
+									</div>
+								</div>
+							{/if}
 						</div>
 						<div class="delivered-actions">
 							<div class="summary-total-box">
@@ -923,6 +1007,44 @@
 		gap: 0.3rem;
 		font-size: 0.85rem;
 		color: #cbd5e1;
+	}
+
+	.order-notes-box {
+		margin: 0 0 0.85rem;
+		padding: 0.75rem;
+		background: #111827;
+		border: 1px solid #334155;
+		border-radius: 0.4rem;
+	}
+
+	.order-notes-box.compact {
+		margin-top: 0.85rem;
+		margin-bottom: 0;
+	}
+
+	.order-notes-list {
+		display: grid;
+		gap: 0.45rem;
+	}
+
+	.order-note-entry {
+		padding: 0.45rem 0.55rem;
+		background: #0f172a;
+		border: 1px solid #334155;
+		border-radius: 0.35rem;
+	}
+
+	.order-note-meta {
+		margin: 0;
+		font-size: 0.78rem;
+		color: #cbd5e1;
+	}
+
+	.order-note-text {
+		margin: 0.2rem 0 0;
+		font-size: 0.84rem;
+		color: #e2e8f0;
+		white-space: pre-wrap;
 	}
 
 	.order-summary-row {

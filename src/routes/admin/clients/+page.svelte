@@ -306,8 +306,7 @@
 				<select
 					id="client-status-filter"
 					class="form-input"
-					value={statusFilter}
-					onchange={(e) => (statusFilter = e.currentTarget.value)}
+					bind:value={statusFilter}
 				>
 					<option value="all">Todos ({clientDrafts.length})</option>
 					<option value="active">Activos ({clientDrafts.filter((c) => c.isActive !== false).length})</option>
@@ -345,8 +344,7 @@
 						class="form-input"
 					/>
 					<select
-						value={newClient.zone}
-						onchange={(e) => (newClient = { ...newClient, zone: Number(e.currentTarget.value) })}
+						bind:value={newClient.zone}
 						class="form-input"
 					>
 						{#each zones as zone (zone.id)}

@@ -70,7 +70,9 @@
 				phone: staff.phone || '',
 				vehicle: staff.vehicle || '',
 				status: staff.status || 'active',
-				zoneId: staff.zoneId ?? ''
+				zoneIds: Array.isArray(staff.zoneIds)
+					? [...staff.zoneIds]
+					: (staff.zoneId == null ? [] : [Number(staff.zoneId)])
 			}));
 		});
 
@@ -82,11 +84,17 @@
 	});
 
 	// Estado derivado computado
-	const freeStaff = $derived(allStaff.filter((s) => s.zoneId === null));
+	const freeStaff = $derived(
+		allStaff.filter((s) => !Array.isArray(s.zoneIds) || s.zoneIds.length === 0)
+	);
 	const assignedRoutes = $derived(
 		allZones.map((zone) => ({
 			...zone,
-			staff: allStaff.filter((s) => Number(s.zoneId) === Number(zone.id))
+			staff: allStaff.filter((s) =>
+				Array.isArray(s.zoneIds)
+					? s.zoneIds.some((zoneId) => Number(zoneId) === Number(zone.id))
+					: Number(s.zoneId) === Number(zone.id)
+			)
 		}))
 	);
 	const uncoveredRoutes = $derived(assignedRoutes.filter((route) => route.staff.length === 0));
@@ -96,10 +104,20 @@
 	 * @param {number} staffId - ID del repartidor
 	 * @param {number|null} zoneId - ID de la zona (null para desasignar)
 	 */
-	function assignStaffToZone(staffId, zoneId) {
+	async function assignStaffToZone(staffId, zoneId) {
 		if (!staffId) return;
-		const validZoneId = zoneId === null || zoneId === '' ? null : Number(zoneId);
-		deliveryStaffStore.assignZone(staffId, validZoneId);
+		const validZoneId = Number(zoneId);
+		if (!Number.isFinite(validZoneId)) {
+			assignmentError = 'Zona inválida.';
+			return;
+		}
+
+		const result = await deliveryStaffStore.assignZoneDbFirst(staffId, validZoneId);
+		if (!result?.success) {
+			assignmentError = result?.error || 'No se pudo asignar el repartidor a la ruta.';
+			return;
+		}
+
 		assignmentError = '';
 		selectedAssignmentStaff = null;
 		selectedAssignmentZone = null;
@@ -109,8 +127,20 @@
 	 * Desasigna un repartidor de su zona
 	 * @param {number} staffId - ID del repartidor
 	 */
-	function unassignStaff(staffId) {
-		deliveryStaffStore.assignZone(staffId, null);
+	async function unassignStaff(staffId, zoneId) {
+		const result = await deliveryStaffStore.unassignZoneDbFirst(staffId, zoneId);
+		if (!result?.success) {
+			assignmentError = result?.error || 'No se pudo desasignar la ruta.';
+		}
+	}
+
+	function getAssignableStaffForZone(zoneId) {
+		return allStaff.filter((staff) => {
+			const assignedZoneIds = Array.isArray(staff.zoneIds)
+				? staff.zoneIds
+				: (staff.zoneId == null ? [] : [Number(staff.zoneId)]);
+			return !assignedZoneIds.some((assignedZoneId) => Number(assignedZoneId) === Number(zoneId));
+		});
 	}
 
 	/**
@@ -133,13 +163,13 @@
 		selectedAssignmentZone = null;
 	}
 
-	function confirmAssignmentFromModal() {
+	async function confirmAssignmentFromModal() {
 		if (!selectedAssignmentStaff) {
 			assignmentError = 'Selecciona un repartidor disponible para continuar.';
 			return;
 		}
 
-		assignStaffToZone(selectedAssignmentStaff, selectedAssignmentZone);
+		await assignStaffToZone(selectedAssignmentStaff, selectedAssignmentZone);
 	}
 
 	/**
@@ -158,6 +188,18 @@
 		}
 		const zone = allZones.find((item) => Number(item.id) === Number(zoneId));
 		return zone?.name || 'Sin zona';
+	}
+
+	function getZoneNames(zoneIds = []) {
+		if (!Array.isArray(zoneIds) || zoneIds.length === 0) {
+			return 'Sin rutas';
+		}
+
+		const names = zoneIds
+			.map((zoneId) => getZoneName(zoneId))
+			.filter((name) => name && name !== 'Sin zona');
+
+		return names.length > 0 ? names.join(', ') : 'Sin rutas';
 	}
 
 	function getStatusLabel(status) {
@@ -288,7 +330,7 @@
 			phone: newStaff.phone,
 			vehicle: newStaff.vehicle,
 			status: newStaff.status,
-			zoneId: newStaff.zoneId === '' ? null : Number(newStaff.zoneId)
+			zoneIds: newStaff.zoneId === '' ? [] : [Number(newStaff.zoneId)]
 		});
 
 		resetNewStaff();
@@ -347,8 +389,7 @@
 			password: draft.password,
 			phone: draft.phone,
 			vehicle: draft.vehicle,
-			status: draft.status,
-			zoneId: draft.zoneId === '' ? null : Number(draft.zoneId)
+			status: draft.status
 		});
 
 		staffError = '';
@@ -374,7 +415,9 @@
 							phone: original.phone || '',
 							vehicle: original.vehicle || '',
 							status: original.status || 'active',
-							zoneId: original.zoneId ?? ''
+							zoneIds: Array.isArray(original.zoneIds)
+								? [...original.zoneIds]
+								: (original.zoneId == null ? [] : [Number(original.zoneId)])
 						}
 					: staff
 			);
@@ -437,7 +480,7 @@
 												<p class="staff-vehicle">🚗 {staff.vehicle}</p>
 											</div>
 											<button
-												onclick={() => unassignStaff(staff.id)}
+												onclick={() => unassignStaff(staff.id, route.id)}
 												class="btn-unassign"
 												title="Desasignar del ruta"
 											>
@@ -499,10 +542,10 @@
 								<div class="zone-selector-wrap">
 									<select
 										class="zone-selector"
-										onchange={(e) => {
+										onchange={async (e) => {
 											const zoneId = e.target.value;
 											if (zoneId) {
-												assignStaffToZone(staff.id, Number(zoneId));
+												await assignStaffToZone(staff.id, Number(zoneId));
 												e.target.value = ''; // Reset dropdown
 											}
 										}}
@@ -554,27 +597,27 @@
 								</div>
 
 								<!-- Selector rápido de repartidores disponibles -->
-								{#if freeStaff.length > 0}
+								{#if getAssignableStaffForZone(route.id).length > 0}
 									<div class="quick-assign">
 										<p class="quick-assign-label">Asignar repartidor:</p>
 										<select
 											class="quick-assign-select"
-											onchange={(e) => {
+											onchange={async (e) => {
 												if (e.target.value) {
-													assignStaffToZone(Number(e.target.value), route.id);
+													await assignStaffToZone(Number(e.target.value), route.id);
 													e.target.value = '';
 												}
 											}}
 										>
 											<option value="">Selecciona un repartidor...</option>
-											{#each freeStaff as staff (staff.id)}
+											{#each getAssignableStaffForZone(route.id) as staff (staff.id)}
 												<option value={staff.id}>{staff.name} - {staff.phone}</option>
 											{/each}
 										</select>
 									</div>
-								{:else}
+									{:else}
 									<div class="no-available-staff">
-										<p>No hay repartidores disponibles</p>
+										<p>Todos los repartidores ya están asignados a esta ruta</p>
 									</div>
 								{/if}
 							</div>
@@ -795,8 +838,7 @@
 						class="form-input"
 					/>
 					<select
-						value={newStaff.status}
-						onchange={(e) => (newStaff = { ...newStaff, status: e.currentTarget.value })}
+						bind:value={newStaff.status}
 						class="form-input"
 					>
 						<option value="active">Activo</option>
@@ -804,8 +846,7 @@
 						<option value="on_delivery">En reparto</option>
 					</select>
 					<select
-						value={newStaff.zoneId}
-						onchange={(e) => (newStaff = { ...newStaff, zoneId: e.currentTarget.value })}
+						bind:value={newStaff.zoneId}
 						class="form-input"
 					>
 						<option value="">Sin zona asignada</option>
@@ -841,7 +882,7 @@
 						<th>Teléfono</th>
 						<th>Vehículo</th>
 						<th>Estado</th>
-						<th>Zona</th>
+						<th>Rutas</th>
 						<th class="align-center">Acción</th>
 					</tr>
 				</thead>
@@ -917,7 +958,7 @@
 								<td>
 									{#if editingStaffId === staff.id}
 										<select
-											value={staff.status}
+											bind:value={staff.status}
 											onchange={(e) => updateStaffDraft(staff.id, 'status', e.currentTarget.value)}
 											class="table-input"
 										>
@@ -929,22 +970,7 @@
 										{getStatusLabel(staff.status)}
 									{/if}
 								</td>
-								<td>
-									{#if editingStaffId === staff.id}
-										<select
-											value={staff.zoneId ?? ''}
-											onchange={(e) => updateStaffDraft(staff.id, 'zoneId', e.currentTarget.value)}
-											class="table-input"
-										>
-											<option value="">Sin zona</option>
-											{#each allZones as zone (zone.id)}
-												<option value={zone.id}>{zone.name}</option>
-											{/each}
-										</select>
-									{:else}
-										{getZoneName(staff.zoneId)}
-									{/if}
-								</td>
+								<td>{getZoneNames(staff.zoneIds)}</td>
 								<td class="align-center">
 									<div class="action-buttons">
 										{#if editingStaffId === staff.id}
@@ -1003,7 +1029,7 @@
 				<h3 class="modal-title">Confirmar Asignación</h3>
 
 				{#if selectedAssignmentStaff === null}
-					<p class="modal-message">Selecciona un repartidor libre para esta zona.</p>
+					<p class="modal-message">Selecciona un repartidor para esta zona.</p>
 					<select
 						class="form-input"
 						value=""
@@ -1015,7 +1041,7 @@
 						}}
 					>
 						<option value="">Selecciona un repartidor...</option>
-						{#each freeStaff as staff (staff.id)}
+						{#each getAssignableStaffForZone(selectedAssignmentZone) as staff (staff.id)}
 							<option value={staff.id}>{staff.name} - {staff.phone}</option>
 						{/each}
 					</select>
