@@ -10,7 +10,7 @@ import {
 	upsertClientDb,
 	deleteClientDb,
 	fetchOrdersDb,
-	insertOrderWithItemsDb,
+	createClientOrderDb,
 	createManualOrderDb,
 	patchOrderDb,
 	reorderDeliveryOrdersDb,
@@ -31,9 +31,11 @@ import {
 	fetchDeliveryStaffDb,
 	upsertDeliveryStaffDb,
 	deleteDeliveryStaffDb,
+	fetchProfileByAuthUserIdDb,
 	ensureAuthUserExistsDb,
 	syncAuthUserCredentialsDb
 } from '../utils/supabaseDb.js';
+import { isSupabaseAuthEnabled, supabaseClient } from '../utils/supabaseClient.js';
 
 if (!isDatabaseEnabled) {
 	// La app funciona, pero no podrá leer ni persistir datos sin variables PUBLIC_SUPABASE_*
@@ -1068,7 +1070,40 @@ function createOrdersStore() {
 
 	const createDbFirst = async (clientId, items, notes = '') => {
 		let orderId = Math.max(...ordersStore.getAll().map((o) => Number(o.id)), 1000) + 1;
-		const parsedClientId = Number(clientId);
+		let parsedClientId = Number(clientId);
+
+		if (isDatabaseEnabled) {
+			if (!isSupabaseAuthEnabled || !supabaseClient) {
+				return { success: false, error: 'Supabase Auth no está configurado' };
+			}
+
+			try {
+				const {
+					data: { user: authUser }
+				} = await supabaseClient.auth.getUser();
+
+				if (!authUser?.id) {
+					return { success: false, error: 'Sesión no válida. Inicia sesión de nuevo.' };
+				}
+
+				const profile = await fetchProfileByAuthUserIdDb(authUser.id);
+				if (!profile?.id || profile.role !== 'client') {
+					return {
+						success: false,
+						error: 'No se pudo resolver el perfil cliente autenticado para crear el pedido.'
+					};
+				}
+
+				// DB-first: usar siempre el id real del perfil autenticado para cumplir RLS.
+				parsedClientId = Number(profile.id);
+			} catch (error) {
+				console.error('No se pudo resolver cliente autenticado para crear pedido:', error);
+				return {
+					success: false,
+					error: 'No se pudo validar la sesión del cliente para crear el pedido.'
+				};
+			}
+		}
 
 		const processedItems = (items || [])
 			.map((item) => {
@@ -1120,9 +1155,26 @@ function createOrdersStore() {
 
 		if (isDatabaseEnabled) {
 			try {
-				await insertOrderWithItemsDb(createdOrder);
+				const rpcResult = await createClientOrderDb({
+					notes,
+					items: processedItems
+				});
+
+				orderId = Number(rpcResult.orderId);
+				createdOrder.id = orderId;
+				createdOrder.totalAmount = Number(rpcResult.totalAmount || createdOrder.totalAmount);
+				createdOrder.scheduledDelivery = rpcResult.scheduledDelivery ?? createdOrder.scheduledDelivery;
 			} catch (error) {
 				console.error('No se pudo guardar el pedido en Supabase:', error);
+				const raw = String(error?.message || '');
+				if (raw.includes('Could not find the function public.app_client_create_order')) {
+					return {
+						success: false,
+						error:
+							'La base de datos no tiene la RPC app_client_create_order. Aplica migraciones pendientes y vuelve a intentar.'
+					};
+				}
+
 				return { success: false, error: error?.message || 'No se pudo crear el pedido en base de datos' };
 			}
 		}

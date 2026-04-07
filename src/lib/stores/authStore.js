@@ -55,6 +55,51 @@ function createAuthStore() {
 	const { subscribe, set } = writable(initialValue);
 	let sessionTimeoutHandle = null;
 
+	async function syncSessionWithSupabaseAuth() {
+		if (typeof window === 'undefined' || !isSupabaseAuthEnabled || !supabaseClient) {
+			return;
+		}
+
+		try {
+			const {
+				data: { session }
+			} = await supabaseClient.auth.getSession();
+
+			if (!session?.user?.id) {
+				set(null);
+				sessionStorage.removeItem(SESSION_STORAGE_KEY);
+				sessionStorage.removeItem(SESSION_EXPIRY_KEY);
+				return;
+			}
+
+			const user = await fetchProfileByAuthUserIdDb(session.user.id);
+			if (!user) {
+				await supabaseClient.auth.signOut();
+				set(null);
+				sessionStorage.removeItem(SESSION_STORAGE_KEY);
+				sessionStorage.removeItem(SESSION_EXPIRY_KEY);
+				return;
+			}
+
+			const syncedSession = {
+				id: user.id,
+				email: user.email,
+				name: user.name,
+				role: user.role,
+				zone: user.zone,
+				deliveryStaffId: user.role === 'delivery' ? (user.deliveryStaffId ?? user.id) : null,
+				loginAt: new Date().toISOString()
+			};
+
+			const expiryTime = Date.now() + SESSION_TIMEOUT_MS;
+			set(syncedSession);
+			sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(syncedSession));
+			sessionStorage.setItem(SESSION_EXPIRY_KEY, expiryTime.toString());
+		} catch (error) {
+			console.error('No se pudo sincronizar sesión con Supabase Auth:', error);
+		}
+	}
+
 	const store = {
 		subscribe,
 
@@ -351,6 +396,9 @@ function createAuthStore() {
 			const expiryTime = parseInt(expiryStr);
 			const timeLeft = expiryTime - Date.now();
 			return timeLeft < SESSION_TIMEOUT_MS - SESSION_WARNING_MS && timeLeft > 0;
+		},
+		syncWithSupabase: async () => {
+			await syncSessionWithSupabaseAuth();
 		}
 	};
 
@@ -359,3 +407,14 @@ function createAuthStore() {
 
 // Exporta la instancia única del store de autenticación
 export const authStore = createAuthStore();
+
+if (typeof window !== 'undefined' && isSupabaseAuthEnabled && supabaseClient) {
+	void (async () => {
+		// Rehidrata la sesión local usando el token real de Supabase.
+		await authStore.syncWithSupabase();
+	})();
+
+	supabaseClient.auth.onAuthStateChange(() => {
+		void authStore.syncWithSupabase();
+	});
+}

@@ -543,6 +543,31 @@ export async function createManualOrderDb({ clientId, notes, specialDeliveryId, 
 	return Number(rows[0].order_id);
 }
 
+export async function createClientOrderDb({ notes, items }) {
+	const rows = await request('rpc/app_client_create_order', {
+		method: 'POST',
+		body: {
+			p_notes: String(notes || ''),
+			p_items: Array.isArray(items)
+				? items.map((item) => ({
+					productId: Number(item.productId),
+					quantity: Number(item.quantity)
+				}))
+				: []
+		}
+	});
+
+	if (!Array.isArray(rows) || rows.length === 0 || !rows[0]?.order_id) {
+		throw new Error('No se pudo crear pedido cliente en RPC de Supabase');
+	}
+
+	return {
+		orderId: Number(rows[0].order_id),
+		totalAmount: Number(rows[0].total_amount || 0),
+		scheduledDelivery: rows[0].scheduled_delivery ? new Date(rows[0].scheduled_delivery) : null
+	};
+}
+
 /**
  * Actualiza parcialmente una orden (PATCH).
  * Solo actualiza los campos incluidos en el objeto patch.
